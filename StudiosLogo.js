@@ -1,35 +1,50 @@
 (function () {
     'use strict';
 
-    function studiosPlugin() {
-        Lampa.Listener.follow('full', function (e) {
-            if (e.type === 'complite') {
-                var card = e.object.render();
-                var movie = e.data.movie;
-                
-                // Проверяем наличие данных о студиях
-                if (movie.production_companies && movie.production_companies.length > 0) {
-                    var container = $('<div class="card-studios" style="display: flex; gap: 15px; margin-top: 20px; align-items: center;"></div>');
+    Lampa.Platform.tv();
 
-                    movie.production_companies.forEach(function (company) {
-                        if (company.logo_path) {
-                            var logoUrl = 'https://image.tmdb.org/t/p/h30' + company.logo_path;
-                            var img = $('<img src="' + logoUrl + '" style="height: 30px; filter: brightness(0) invert(1); opacity: 0.8;" alt="' + company.name + '">');
-                            container.append(img);
-                        }
-                    });
+    function addStudioLogo() {
+        // Подписываемся на событие отрисовки карточки
+        Lampa.Listener.follow('card', function (e) {
+            if (e.type == 'after') {
+                var card = e.element;
+                var data = e.data;
 
-                    // Вставляем контейнер после описания фильма
-                    card.find('.full-movie__descr').after(container);
+                // Проверяем, есть ли данные о студиях (production_companies)
+                // Обычно они доступны в полной карточке или кэше
+                if (data.production_companies && data.production_companies.length > 0) {
+                    var company = data.production_companies[0]; // Берем первую студию
+                    
+                    if (company.logo_path) {
+                        var logoUrl = 'https://image.tmdb.org/t/p/w200' + company.logo_path;
+                        
+                        var html = `<div class="card-studio-logo" style="
+                            position: absolute;
+                            top: 10px;
+                            right: 10px;
+                            width: 40px;
+                            height: 40px;
+                            background: rgba(0,0,0,0.5);
+                            border-radius: 5px;
+                            padding: 5px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            z-index: 10;
+                        ">
+                            <img src="${logoUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                        </div>`;
+
+                        $(card).append(html);
+                    }
                 }
             }
         });
     }
 
-    // Регистрация плагина в Lampa
-    if (window.appready) {
-        studiosPlugin();
-    } else {
-        Lampa.Events.subscribe('app:ready', studiosPlugin);
+    // Запуск при готовности приложения
+    if (window.appready) addStudioLogo();
+    else {
+        Lampa.Events.on('app:ready', addStudioLogo);
     }
 })();
