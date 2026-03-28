@@ -1,11 +1,36 @@
 (function () {
     'use strict';
 
-    // 1. Установка значений по умолчанию
+    // 1. Установка настроек по умолчанию
     Lampa.Storage.setDefault('ymod_studios_size', '0.7');
     Lampa.Storage.setDefault('ymod_studios_show_bg', true);
 
-    // 2. Стили
+    // 2. Регистрация настроек ПРЯМО в раздел Интерфейс
+    Lampa.Settings.add({
+        title: 'Логотипы студий: Размер',
+        name: 'ymod_studios_size',
+        type: 'select',
+        values: {
+            '0.5': 'Крошечный',
+            '0.7': 'Обычный',
+            '0.9': 'Крупный',
+            '1.2': 'Огромный'
+        },
+        default: '0.7',
+        section: 'interface',
+        icon: '<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H3V8h18v8zM8 10h2v4H8v-4zm6 0h2v4h-2v-4z" fill="currentColor"/></svg>'
+    });
+
+    Lampa.Settings.add({
+        title: 'Логотипы студий: Фон',
+        name: 'ymod_studios_show_bg',
+        type: 'bool',
+        default: true,
+        section: 'interface',
+        icon: '<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>'
+    });
+
+    // 3. Стили
     var styles = `
         .plugin-uk-title-combined { 
             margin-top: 10px; 
@@ -36,49 +61,10 @@
             width: auto; 
             object-fit: contain; 
         }
-        .studio-logo-text { 
-            font-size: 0.8em; 
-            font-weight: bold; 
-            color: #fff !important; 
-        }
     `;
     $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    // 3. Регистрация настроек (чтобы они появились в правом меню)
-    Lampa.Settings.add({
-        title: 'Логотипы студий',
-        name: 'ymod_studios_group',
-        type: 'scroll', // Группировка
-        section: 'interface',
-        icon: '<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z" fill="currentColor"/></svg>',
-        onRender: function(item) {
-            // Добавляем выбор размера
-            Lampa.Settings.add({
-                title: 'Размер логотипов',
-                name: 'ymod_studios_size',
-                type: 'select',
-                values: {
-                    '0.5': 'Крошечный',
-                    '0.7': 'Обычный',
-                    '0.9': 'Крупный',
-                    '1.2': 'Огромный'
-                },
-                default: '0.7',
-                section: 'interface'
-            });
-
-            // Переключатель фона
-            Lampa.Settings.add({
-                title: 'Фоновая подложка',
-                name: 'ymod_studios_show_bg',
-                type: 'bool',
-                default: true,
-                section: 'interface'
-            });
-        }
-    });
-
-    // 4. Логика инверсии цвета
+    // 4. Логика инверсии черных логотипов
     function analyzeAndInvert(img, threshold) {
         try {
             var canvas = document.createElement('canvas');
@@ -97,7 +83,7 @@
         } catch (e) {}
     }
 
-    // 5. Отрисовка
+    // 5. Отрисовка в карточке
     function renderStudiosTitle(render, movie) {
         if (!render) return;
         $(".plugin-uk-title-combined", render).remove();
@@ -109,10 +95,10 @@
         if (movie && movie.production_companies) {
             movie.production_companies.slice(0, 3).forEach(function (co) {
                 var content = co.logo_path 
-                    ? `<img src="https://image.tmdb.org/t/p/h100${co.logo_path}" crossorigin="anonymous" class="studio-img-check">` 
-                    : `<span class="studio-logo-text">${co.name}</span>`;
+                    ? '<img src="https://image.tmdb.org/t/p/h100' + co.logo_path + '" crossorigin="anonymous" class="studio-img-check">' 
+                    : '<span style="font-size: 0.8em; font-weight: bold; color: #fff;">' + co.name + '</span>';
                 
-                html += `<div class="rate--studio studio-logo ymod-studio-item" data-id="${co.id}" data-name="${co.name}">${content}</div>`;
+                html += '<div class="rate--studio studio-logo ymod-studio-item" data-id="' + co.id + '" data-name="' + co.name + '">' + content + '</div>';
             });
         }
         if (!html) return;
@@ -123,7 +109,8 @@
 
         $('.rate--studio', render).css({
             'background': showBg ? 'rgba(255,255,255,0.08)' : 'transparent',
-            'padding': showBg ? '5px 12px' : '5px 0'
+            'padding': showBg ? '5px 12px' : '5px 0',
+            'margin-right': '10px'
         });
         $('.rate--studio img', render).css('height', sizeEm);
 
@@ -145,7 +132,7 @@
         });
     }
 
-    // 6. Слушатель
+    // 6. Запуск при открытии карточки
     Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complite' || e.type === 'complete') {
             var card = e.data.movie;
