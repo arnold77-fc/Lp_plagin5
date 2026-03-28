@@ -2,46 +2,33 @@
     'use strict';
 
     function startPlugin() {
-        // 1. Функция принудительной вставки пункта в меню
-        function injectSettings() {
-            // Проверяем, открыто ли меню настроек и конкретно раздел интерфейса
-            var body = $('.settings--opened');
-            var list = body.find('.settings-list');
-            
-            // Если мы внутри настроек интерфейса и нашего пункта еще нет
-            if (list.length && !list.find('[data-name="studio_logos_settings"]').length) {
-                // Проверяем, что это именно раздел "Интерфейс" (по наличию характерных пунктов)
-                if (list.find('[data-name="interface_size"], [data-name="title_style"]').length) {
-                    
-                    var item = $('<div class="settings-param selector" data-name="studio_logos_settings" data-type="open">' +
-                        '<div class="settings-param__name">Настройки логотипов</div>' +
-                        '<div class="settings-param__value">Изменить размер, фон и насыщенность</div>' +
-                        '</div>');
+        // 1. Прямая регистрация в ГЛАВНОМ списке настроек
+        Lampa.Settings.listener.follow('open', function (e) {
+            if (e.name == 'main') { // Если открыто главное меню настроек
+                var item = $('<div class="settings-folder selector" data-name="studio_logos_settings">' +
+                    '<div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2l-5.5 9h11L12 2zm0 3.84L13.93 9h-3.87L12 5.84zM17.5 13c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM3 21.5h8v-8H3v8zm2-6h4v4H5v-4z" fill="white"/></svg></div>' +
+                    '<div class="settings-folder__name">Настройки логотипов</div>' +
+                    '</div>');
 
-                    item.on('hover:enter', function () {
-                        openLogoSettings();
-                    });
+                item.on('hover:enter', function () {
+                    openLogoSettings();
+                });
 
-                    // Вставляем в начало списка
-                    list.prepend(item);
-                    
-                    // Обновляем контроллер, чтобы навигация пульта подхватила новый элемент
-                    if (window.Lampa && Lampa.Controller) {
-                        Lampa.Controller.add('settings_interface', {
-                            toggle: function () {
-                                Lampa.Controller.collectionSet(list);
-                                Lampa.Controller.collectionFocus(item[0], list);
-                            }
-                        });
+                // Вставляем сразу после пункта "Интерфейс" или в начало
+                var interface_btn = e.body.find('[data-name="interface"]');
+                if (interface_btn.length) interface_btn.after(item);
+                else e.body.find('.settings-list').prepend(item);
+                
+                Lampa.Controller.add('settings_main', {
+                    toggle: function () {
+                        Lampa.Controller.collectionSet(e.body);
+                        Lampa.Controller.collectionFocus(item[0], e.body);
                     }
-                }
+                });
             }
-        }
+        });
 
-        // Запускаем постоянную проверку (раз в 500мс), когда открыты настройки
-        setInterval(injectSettings, 500);
-
-        // 2. Функция открытия окна настроек
+        // 2. Функция отрисовки окна настроек
         function openLogoSettings() {
             Lampa.Settings.create({
                 title: 'Настройки логотипов',
@@ -50,15 +37,19 @@
                 }
             }, function (files) {
                 var items = [
-                    { name: 'Размер логотипа', param: 'studio_logo_size', default: '0.7em', list: { '0.5em': 'Очень маленький', '0.7em': 'Стандартный', '1em': 'Средний', '1.3em': 'Большой' } },
+                    { name: 'Размер логотипа', param: 'studio_logo_size', default: '0.7em', list: { '0.5em': 'Очень маленький', '0.7em': 'Стандартный', '1.1em': 'Средний', '1.4em': 'Большой' } },
                     { name: 'Подложка (фон)', param: 'studio_logo_bg', default: 'true', list: { 'true': 'Включена', 'false': 'Выключена' } },
                     { name: 'Насыщенность', param: 'studio_logo_saturation', default: '1', list: { '0': 'Чёрно-белый', '0.5': 'Приглушенный', '1': 'Оригинал', '1.5': 'Яркий' } },
-                    { name: 'Количество', param: 'studio_logo_count', default: '3', list: { '1': '1 шт.', '3': '3 шт.', '5': '5 шт.', '10': '10 шт.' } }
+                    { name: 'Количество логотипов', param: 'studio_logo_count', default: '3', list: { '1': '1 шт.', '3': '3 шт.', '5': '5 шт.', '10': '10 шт.' } }
                 ];
 
                 items.forEach(function (opt) {
                     var current = Lampa.Storage.get(opt.param, opt.default);
-                    var field = Lampa.Settings.template({ name: opt.name, type: 'select', value: opt.list[current] || current });
+                    var field = Lampa.Settings.template({
+                        name: opt.name,
+                        type: 'select',
+                        value: opt.list[current] || current
+                    });
 
                     field.on('hover:enter', function () {
                         Lampa.Select.show({
@@ -81,9 +72,9 @@
         // 3. Стили
         var styles = `
             .plugin-uk-title-combined { margin: 10px 0; width: 100%; display: block; }
-            .studio-logos-container { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-            .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 6px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,0.05); }
-            .rate--studio.studio-logo.focus { background: rgba(255,255,255,0.25) !important; outline: 2px solid #fff; }
+            .studio-logos-container { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+            .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 8px; overflow: hidden; cursor: pointer; }
+            .rate--studio.studio-logo.focus { background: rgba(255,255,255,0.3) !important; outline: 2px solid #fff; transform: scale(1.05); }
             .rate--studio.studio-logo img { width: auto; max-width: 180px; }
         `;
         if (!$('#ymod-studio-styles').length) $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
@@ -115,8 +106,8 @@
                             item.css({
                                 'filter': 'saturate(' + saturation + ')',
                                 'background': showBg ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                'padding': showBg ? '5px 10px' : '0',
-                                'margin-right': '5px'
+                                'padding': showBg ? '5px 12px' : '0',
+                                'margin-right': '8px'
                             });
                             item.find('img').css('height', sizeEm);
 
@@ -135,11 +126,10 @@
         });
     }
 
-    // Запуск
     if (window.Lampa) startPlugin();
     else {
         var wait = setInterval(function(){
-            if(window.Lampa){ clearInterval(wait); startPlugin(); }
-        }, 500);
+            if(window.Lampa && Lampa.Settings){ clearInterval(wait); startPlugin(); }
+        }, 300);
     }
 })();
