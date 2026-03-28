@@ -2,8 +2,8 @@
     'use strict';
 
     function startPlugin() {
-        // 1. Настройки в меню Интерфейс
-        Lampa.Settings.listener.follow('open', function (e) {
+        // 1. Создаем объект наших настроек
+        Lampa.Settings.main().on('open', function (e) {
             if (e.name == 'interface') {
                 var item = $('<div class="settings-param selector" data-name="studio_logos_settings" data-type="open">' +
                     '<div class="settings-param__name">Настройки логотипов</div>' +
@@ -60,7 +60,7 @@
                                         Lampa.Storage.set(opt.param, v.value);
                                         field.find('.settings-param__value').text(v.title);
                                         Lampa.Settings.update();
-                                        Lampa.Controller.toggle(); // Возврат фокуса
+                                        Lampa.Controller.toggle();
                                     },
                                     onBack: Lampa.Controller.toggle
                                 });
@@ -70,7 +70,18 @@
                     });
                 });
 
-                e.body.find('.settings-list').append(item);
+                // Вставляем в самый верх списка интерфейса для надежности
+                var list = e.body.find('.settings-list');
+                if (list.length) list.prepend(item); 
+                else e.body.append(item);
+
+                // Принудительно обновляем контроллер навигации
+                Lampa.Controller.add('settings_interface', {
+                    toggle: function () {
+                        Lampa.Controller.collectionSet(e.body);
+                        Lampa.Controller.collectionFocus(item[0], e.body);
+                    }
+                });
             }
         });
 
@@ -80,11 +91,11 @@
             .studio-logos-container { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
             .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 6px; overflow: hidden; cursor: pointer; }
             .rate--studio.studio-logo.focus { background: rgba(255,255,255,0.3) !important; outline: 2px solid #fff; }
-            .rate--studio.studio-logo img { width: auto; max-width: 180px; object-fit: contain; }
+            .rate--studio.studio-logo img { width: auto; max-width: 180px; height: 0.7em; }
         `;
         if (!$('#ymod-studio-styles').length) $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-        // 3. Отрисовка в карточке
+        // 3. Логика отрисовки
         Lampa.Listener.follow('full', function(e) {
             if (e.type === 'complite' || e.type === 'complete') {
                 var movie = e.data.movie;
@@ -125,19 +136,19 @@
 
                         var target = render.find('.full-start-new__title, .full-start__title');
                         if (target.length) target.after(html);
-                        
-                        // Если мы в карточке, нужно обновить контроллер, чтобы новые логотипы были кликабельны
-                        Lampa.Controller.enable('full_start'); 
                     }
                 });
             }
         });
     }
 
-    var wait = setInterval(function(){
-        if(typeof Lampa !== 'undefined' && Lampa.Settings){
-            clearInterval(wait);
-            startPlugin();
-        }
-    }, 300);
+    if (window.Lampa) startPlugin();
+    else {
+        var wait = setInterval(function(){
+            if(window.Lampa && Lampa.Settings){
+                clearInterval(wait);
+                startPlugin();
+            }
+        }, 200);
+    }
 })();
