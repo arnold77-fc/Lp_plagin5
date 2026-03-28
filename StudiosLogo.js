@@ -2,31 +2,38 @@
     'use strict';
 
     function addStudioLogo() {
-        // Подписываемся на событие открытия полной карточки
         Lampa.Listener.follow('full', function (e) {
-            if (e.type == 'complite') { // Событие, когда данные загружены и отрисованы
-                var render = e.object.render(); // Получаем DOM-элемент карточки
-                var data = e.data; // Тут уже есть production_companies
+            // Исправлено: complete вместо complite
+            if (e.type == 'complete') { 
+                var render = e.object.render();
+                var data = e.data; // В объекте full данные обычно лежат здесь
 
-                if (data.movie.production_companies && data.movie.production_companies.length > 0) {
-                    var company = data.movie.production_companies.find(c => c.logo_path); // Ищем компанию с логотипом
+                // Проверяем наличие компаний напрямую в data
+                if (data && data.production_companies && data.production_companies.length > 0) {
+                    var company = data.production_companies.find(c => c.logo_path);
                     
                     if (company) {
                         var logoUrl = 'https://image.tmdb.org/t/p/w200' + company.logo_path;
                         
-                        var html = $(`<div class="full-studio-logo" style="
-                            position: absolute;
-                            top: 20px;
-                            right: 20px;
-                            background: rgba(255,255,255,0.1);
-                            padding: 10px;
-                            border-radius: 10px;
-                            backdrop-filter: blur(5px);
-                        ">
-                            <img src="${logoUrl}" style="height: 40px; object-fit: contain;">
-                        </div>`);
+                        var html = $(`
+                            <div class="full-studio-logo" style="
+                                position: absolute;
+                                top: 2rem;
+                                right: 2rem;
+                                background: rgba(255,255,255,0.1);
+                                padding: 10px;
+                                border-radius: 10px;
+                                backdrop-filter: blur(5px);
+                                z-index: 10;
+                            ">
+                                <img src="${logoUrl}" style="height: 40px; width: auto; object-fit: contain; display: block;">
+                            </div>
+                        `);
 
-                        // Добавляем логотип в блок с описанием (или в постер)
+                        // Очистим старый логотип, если он был (чтобы не дублировались при переключении)
+                        $(render).find('.full-studio-logo').remove();
+                        
+                        // Добавляем в основной контейнер карточки
                         $(render).find('.full-start').append(html);
                     }
                 }
@@ -35,7 +42,9 @@
     }
 
     if (window.appready) addStudioLogo();
-    else Lampa.Listener.follow('app', function (e) {
-        if (e.type == 'ready') addStudioLogo();
-    });
+    else {
+        Lampa.Listener.follow('app', function (e) {
+            if (e.type == 'ready') addStudioLogo();
+        });
+    }
 })();
