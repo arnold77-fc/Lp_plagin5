@@ -3,73 +3,72 @@
 
     var L_MOD = 'studio_mod_';
 
+    // Стили с повышенными приоритетами !important
     var styles = `
         .studio-logos-container { 
-            display: flex; 
-            align-items: center; 
-            flex-wrap: wrap; 
-            margin: 10px 0;
-            gap: 8px;
-            width: 100%;
-            z-index: 10;
+            display: flex !important; 
+            align-items: center !important; 
+            flex-wrap: wrap !important; 
+            margin: 15px 0 !important;
+            gap: 10px !important;
+            width: 100% !important;
+            position: relative !important;
         }
         .rate--studio.studio-logo { 
             display: inline-flex !important; 
-            align-items: center; 
-            background: rgba(255,255,255,0.1);
-            padding: 5px 10px;
-            border-radius: 6px;
-            cursor: pointer;
+            background: rgba(255,255,255,0.1) !important;
+            padding: 8px 12px !important;
+            border-radius: 10px !important;
         }
         .rate--studio.studio-logo.focus { 
             background: #fff !important; 
             color: #000 !important;
-            transform: scale(1.05); 
         }
         .rate--studio.studio-logo img { 
-            height: 1em; 
-            max-width: 100px; 
-            object-fit: contain; 
+            height: 25px !important;
+            object-fit: contain !important; 
         }
-        .rate--studio.studio-logo.focus img { filter: invert(1); }
-        .studio-logo-text { font-weight: bold; font-size: 12px; color: inherit; }
+        .rate--studio.studio-logo.focus img { filter: invert(1) !important; }
+        .studio-logo-text { font-size: 14px !important; color: inherit !important; font-weight: bold; }
     `;
 
     if (!$('style#studio-logo-styles').length) {
         $('head').append('<style id="studio-logo-styles">' + styles + '</style>');
     }
 
-    function renderStudios(e) {
-        if (!Lampa.Storage.get(L_MOD + 'enabled', true)) return;
-        
+    function render(e) {
         var movie = e.data.movie;
-        var render = e.object.activity.render();
+        var activity = e.object.activity;
+        var render = activity.render();
         
-        // В версии 1.12.4 иногда ID запрятан глубже
-        var movie_id = movie.id;
-        if (!movie_id) return;
+        // 1. Проверка ID
+        var id = movie.id;
+        if (!id) return;
 
+        // 2. Формируем URL (используем прокси, если он есть в Лампе)
         var type = (movie.number_of_seasons || movie.first_air_date) ? 'tv' : 'movie';
-        
-        // Используем прокси или прямой запрос через встроенный метод Lampa
-        var url = 'https://api.themoviedb.org/3/' + type + '/' + movie_id + '?api_key=' + Lampa.TMDB.key() + '&language=ru';
+        var api_key = Lampa.TMDB.key();
+        var url = 'https://api.themoviedb.org/3/' + type + '/' + id + '?api_key=' + api_key + '&language=ru';
 
-        Lampa.Network.silent(url, function(data) {
+        // 3. Запрос через нативный метод Lampa (обходим CORS на Android)
+        Lampa.Network.native(url, function(data) {
             if (data && data.production_companies && data.production_companies.length) {
-                $('.studio-logos-container').remove();
                 
+                // Удаляем старые контейнеры, если они есть
+                render.find('.studio-logos-container').remove();
+
                 var container = $('<div class="studio-logos-container"></div>');
-                var size = Lampa.Storage.get(L_MOD + 'size', '1em');
 
                 data.production_companies.slice(0, 4).forEach(function(co) {
                     var item = $('<div class="rate--studio studio-logo selector"></div>');
                     
                     if (co.logo_path) {
-                        item.append('<img src="https://image.tmdb.org/t/p/h100' + co.logo_path + '" style="height:'+size+'">');
+                        item.append('<img src="https://image.tmdb.org/t/p/w300' + co.logo_path + '">');
                     } else {
                         item.append('<span class="studio-logo-text">' + co.name + '</span>');
                     }
 
+                    // Клик
                     item.on('hover:enter', function() {
                         Lampa.Activity.push({
                             url: '', 
@@ -85,13 +84,13 @@
                     container.append(item);
                 });
 
-                // Универсальный поиск места вставки для Android v1.12.4
-                var target = render.find('.full-start__buttons, .full-start-new__buttons, .full-info__content, .full-start__title').first();
+                // 4. Поиск места вставки (пробуем все варианты)
+                var target = render.find('.full-start__buttons, .full-start-new__buttons, .full-start__details, .full-info__content').first();
                 
                 if (target.length) {
-                    target.after(container);
+                    target.before(container);
                     
-                    // Регистрация кнопок для пульта
+                    // 5. Перезапуск контроллера для Android
                     Lampa.Controller.add('full_start', {
                         toggle: function() {
                             Lampa.Controller.collection(render[0]);
@@ -101,34 +100,34 @@
                 }
             }
         }, function() {
-            console.log('Studio Mod: Network error');
+            // Ошибка сети
         });
     }
 
-    // Настройки
+    // Слушатель
+    Lampa.Listener.follow('full', function (e) {
+        if (e.type === 'complete') {
+            // На Android 1.12.4 нужно подождать чуть дольше
+            setTimeout(function() {
+                render(e);
+            }, 500);
+        }
+    });
+
+    // Регистрация настроек
     function setupSettings() {
         Lampa.SettingsApi.addComponent({
-            component: 'studio_logos',
+            component: 'studio_logos_mod',
             name: 'Логотипы студий',
-            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
+            icon: '<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg" fill="white"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM17.99 9l-3.14-4.21-1.32 1.77L15.41 9l-3.88 5.19-1.75-2.1L7.11 15.5l10.88 0z"/></svg>'
         });
 
         Lampa.SettingsApi.addParam({
-            component: 'studio_logos',
+            component: 'studio_logos_mod',
             param: { name: L_MOD + 'enabled', type: 'trigger', default: true },
-            field: { name: 'Включить плагин', description: 'Показывать логотипы компаний' }
+            field: { name: 'Включить', description: 'Показывать логотипы компаний' }
         });
     }
-
-    // Слушаем событие открытия карточки
-    Lampa.Listener.follow('full', function (e) {
-        if (e.type === 'complete') {
-            // Увеличиваем задержку для Android, так как карточка рендерится дольше
-            setTimeout(function() {
-                renderStudios(e);
-            }, 300);
-        }
-    });
 
     if (window.appready) setupSettings();
     else Lampa.Listener.follow("app", function (e) { if (e.type === "ready") setupSettings(); });
