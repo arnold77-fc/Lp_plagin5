@@ -1,43 +1,38 @@
 (function () {
     'use strict';
 
-    // 1. Инициализация настроек (Storage)
-    Lampa.Storage.setDefault('ymod_studios_show_bg', true);
+    // 1. Установка значений по умолчанию
     Lampa.Storage.setDefault('ymod_studios_size', '0.7');
-    Lampa.Storage.setDefault('ymod_studios_saturation', '1');
+    Lampa.Storage.setDefault('ymod_studios_show_bg', true);
 
     // 2. Стили
     var styles = `
         .plugin-uk-title-combined { 
             margin-top: 10px; 
             margin-bottom: 5px; 
-            text-align: left; 
             width: 100%; 
             display: flex; 
             flex-direction: column; 
-            align-items: flex-start; 
         }
         .studio-logos-container { 
             display: flex; 
             align-items: center; 
             flex-wrap: wrap; 
+            gap: 10px;
         }
         .rate--studio.studio-logo { 
             display: inline-flex; 
             align-items: center; 
-            vertical-align: middle; 
             border-radius: 8px; 
             transition: all 0.2s ease; 
-            height: auto; 
             cursor: pointer; 
         }
         .rate--studio.studio-logo.focus { 
-            background: rgba(255,255,255,0.2) !important; 
-            border: 1px solid #fff; 
+            background: rgba(255,255,255,0.25) !important; 
+            outline: 2px solid #fff;
             transform: scale(1.05); 
         }
         .rate--studio.studio-logo img { 
-            max-width: 200px; 
             width: auto; 
             object-fit: contain; 
         }
@@ -45,145 +40,117 @@
             font-size: 0.8em; 
             font-weight: bold; 
             color: #fff !important; 
-            white-space: nowrap; 
-        }
-        @media screen and (orientation: portrait), screen and (max-width: 767px) {
-            .plugin-uk-title-combined { align-items: center !important; text-align: center !important; }
-            .studio-logos-container { justify-content: center !important; }
         }
     `;
     $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    // 3. Анализ яркости
+    // 3. Регистрация настроек (чтобы они появились в правом меню)
+    Lampa.Settings.add({
+        title: 'Логотипы студий',
+        name: 'ymod_studios_group',
+        type: 'scroll', // Группировка
+        section: 'interface',
+        icon: '<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z" fill="currentColor"/></svg>',
+        onRender: function(item) {
+            // Добавляем выбор размера
+            Lampa.Settings.add({
+                title: 'Размер логотипов',
+                name: 'ymod_studios_size',
+                type: 'select',
+                values: {
+                    '0.5': 'Крошечный',
+                    '0.7': 'Обычный',
+                    '0.9': 'Крупный',
+                    '1.2': 'Огромный'
+                },
+                default: '0.7',
+                section: 'interface'
+            });
+
+            // Переключатель фона
+            Lampa.Settings.add({
+                title: 'Фоновая подложка',
+                name: 'ymod_studios_show_bg',
+                type: 'bool',
+                default: true,
+                section: 'interface'
+            });
+        }
+    });
+
+    // 4. Логика инверсии цвета
     function analyzeAndInvert(img, threshold) {
         try {
             var canvas = document.createElement('canvas');
             var ctx = canvas.getContext('2d');
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            if (canvas.width === 0 || canvas.height === 0) return;
+            canvas.width = img.naturalWidth || 100;
+            canvas.height = img.naturalHeight || 50;
             ctx.drawImage(img, 0, 0);
-            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            var data = imageData.data;
-            var darkPixels = 0;
-            var totalPixels = 0;
+            var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            var dark = 0, total = 0;
             for (var i = 0; i < data.length; i += 4) {
-                var alpha = data[i + 3];
-                if (alpha < 10) continue;
-                totalPixels++;
-                var r = data[i], g = data[i + 1], b = data[i + 2];
-                var brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                if (brightness < 120) darkPixels++;
+                if (data[i + 3] < 10) continue;
+                total++;
+                if ((data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000 < 125) dark++;
             }
-            if (totalPixels > 0 && (darkPixels / totalPixels) >= threshold) {
-                img.style.filter += " brightness(0) invert(1)";
-            }
+            if (total > 0 && (dark / total) >= threshold) img.style.filter = "brightness(0) invert(1)";
         } catch (e) {}
     }
 
-    // 4. Основная функция отрисовки
+    // 5. Отрисовка
     function renderStudiosTitle(render, movie) {
         if (!render) return;
         $(".plugin-uk-title-combined", render).remove();
         
-        // Получаем значения из настроек
         var showBg = Lampa.Storage.get('ymod_studios_show_bg');
         var sizeEm = Lampa.Storage.get('ymod_studios_size') + 'em';
-        var saturation = Lampa.Storage.get('ymod_studios_saturation');
-        var gapEm = '0.3em';
 
         var html = '';
         if (movie && movie.production_companies) {
-            var companies = movie.production_companies.slice(0, 3);
-            companies.forEach(function (co, index) {
+            movie.production_companies.slice(0, 3).forEach(function (co) {
                 var content = co.logo_path 
-                    ? '<img src="https://image.tmdb.org/t/p/h100' + co.logo_path + '" title="' + co.name + '" crossorigin="anonymous" class="studio-img-check">' 
-                    : '<span class="studio-logo-text">' + co.name + '</span>';
+                    ? `<img src="https://image.tmdb.org/t/p/h100${co.logo_path}" crossorigin="anonymous" class="studio-img-check">` 
+                    : `<span class="studio-logo-text">${co.name}</span>`;
                 
-                if (!showBg && index > 0) {
-                    html += '<span style="color: rgba(255,255,255,0.4); margin: 0 ' + gapEm + '; font-size: 0.6em; display: inline-flex; align-items: center;">●</span>';
-                }
-
-                html += '<div class="rate--studio studio-logo ymod-studio-item" data-id="' + co.id + '" data-name="' + co.name + '" style="display: inline-flex; vertical-align: middle;">' + content + '</div>';
+                html += `<div class="rate--studio studio-logo ymod-studio-item" data-id="${co.id}" data-name="${co.name}">${content}</div>`;
             });
         }
         if (!html) return;
-
-        var bgCSS = showBg 
-            ? 'background: rgba(255,255,255,0.08) !important; padding: 5px 12px !important; margin-right: ' + gapEm + ' !important;' 
-            : 'background: transparent !important; border: none !important; padding: 5px 0px !important; margin-bottom: 0.2em !important;';
 
         var wrap = $('<div class="plugin-uk-title-combined"><div class="studio-logos-container">' + html + '</div></div>');
         var target = $(".full-start-new__title, .full-start__title", render);
         target.after(wrap);
 
-        $('.rate--studio', render).css('cssText', bgCSS + ' filter: saturate(' + saturation + ');');
-        $('.rate--studio img', render).css('cssText', 'height: ' + sizeEm + ' !important;');
+        $('.rate--studio', render).css({
+            'background': showBg ? 'rgba(255,255,255,0.08)' : 'transparent',
+            'padding': showBg ? '5px 12px' : '5px 0'
+        });
+        $('.rate--studio img', render).css('height', sizeEm);
 
         $('.studio-img-check', render).each(function() {
             var img = this;
-            if (img.complete) analyzeAndInvert(img, 0.85);
-            else img.onload = function() { analyzeAndInvert(img, 0.85); };
+            if (img.complete) analyzeAndInvert(img, 0.8);
+            else img.onload = function() { analyzeAndInvert(img, 0.8); };
         });
 
         $('.rate--studio', render).on('hover:enter', function () {
-            var id = $(this).data('id');
-            if (id) Lampa.Activity.push({ url: 'movie', id: id, title: $(this).data('name'), component: 'company', source: 'tmdb', page: 1 });
+            Lampa.Activity.push({ 
+                url: 'movie', 
+                id: $(this).data('id'), 
+                title: $(this).data('name'), 
+                component: 'company', 
+                source: 'tmdb', 
+                page: 1 
+            });
         });
     }
 
-    // 5. Добавление настроек в меню Lampa
-    Lampa.Settings.add({
-        title: 'Логотипы студий',
-        type: 'select',
-        name: 'ymod_studios_main',
-        icon: '<svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z" fill="currentColor"/></svg>',
-        section: 'interface',
-        device: true,
-        onRender: function(item) {
-            // Добавляем дочерние пункты при открытии раздела
-            setTimeout(function() {
-                // Фон
-                Lampa.Settings.add({
-                    title: 'Показывать фон',
-                    name: 'ymod_studios_show_bg',
-                    type: 'bool',
-                    default: true,
-                    section: 'interface',
-                    description: 'Добавляет полупрозрачную подложку под логотипы'
-                });
-
-                // Размер
-                Lampa.Settings.add({
-                    title: 'Размер логотипов',
-                    name: 'ymod_studios_size',
-                    type: 'select',
-                    values: { '0.5': 'Маленький', '0.7': 'Средний', '0.9': 'Большой', '1.2': 'Огромный' },
-                    default: '0.7',
-                    section: 'interface'
-                });
-
-                // Насыщенность
-                Lampa.Settings.add({
-                    title: 'Насыщенность',
-                    name: 'ymod_studios_saturation',
-                    type: 'select',
-                    values: { '0': 'Ч/Б', '0.5': 'Приглушенные', '1': 'Обычные' },
-                    default: '1',
-                    section: 'interface'
-                });
-            }, 0);
-        }
-    });
-
-    // 6. Слушатель событий
+    // 6. Слушатель
     Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complite' || e.type === 'complete') {
             var card = e.data.movie;
             var render = e.object.activity.render();
-            var type = card.first_air_date ? "tv" : "movie";
-            
-            Lampa.Api.sources.tmdb.get(type + "/" + card.id, {}, function (data) {
+            Lampa.Api.sources.tmdb.get((card.first_air_date ? "tv" : "movie") + "/" + card.id, {}, function (data) {
                 renderStudiosTitle(render, data);
             });
         }
