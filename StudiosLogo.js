@@ -2,112 +2,82 @@
     'use strict';
 
     function startPlugin() {
-        console.log('Studio Logos: Plugin Started');
-
         var TMDB_IMAGE_URL = 'https://image.tmdb.org/t/p/h30';
-
-        function getStudioLogos(movie) {
-            var html = '';
-            var companies = movie.production_companies || [];
-            
-            if (companies.length) {
-                companies.forEach(function (co) {
-                    if (co.logo_path) {
-                        html += '<div class="selector studio-logo-badge" data-id="' + co.id + '" data-name="' + co.name + '">' +
-                                    '<img src="' + TMDB_IMAGE_URL + co.logo_path + '" alt="' + co.name + '">' +
-                                '</div>';
-                    } else {
-                        html += '<div class="selector studio-logo-badge text-badge" data-id="' + co.id + '" data-name="' + co.name + '">' +
-                                    '<span>' + co.name + '</span>' +
-                                '</div>';
-                    }
-                });
-            }
-            return html;
-        }
 
         Lampa.Listener.follow('full', function (e) {
             if (e.type !== 'complete') return;
 
-            // Находим основной блок описания фильма
             var render = e.object.activity.render();
             var infoBlock = render.find('.full-start__details');
 
             if (infoBlock.length) {
-                // Удаляем старый контейнер, если он был (при переключении серий/фильмов)
+                // 1. Очистка старого
                 render.find('.studio-logos-container').remove();
 
-                var cont = $('<div class="studio-logos-container"></div>');
-                cont.html(getStudioLogos(e.data.movie));
-                
-                // Добавляем ПЕРЕД описанием или после основной инфы
-                infoBlock.append(cont);
+                // 2. Сборка данных
+                var companies = e.data.movie.production_companies || [];
+                if (companies.length === 0) return;
 
-                // Обработка клика
-                cont.find('.selector').on('hover:enter', function () {
-                    var id = $(this).data('id');
-                    var name = $(this).data('name');
-                    if (id) {
+                var cont = $('<div class="studio-logos-container"></div>');
+                
+                companies.forEach(function (co) {
+                    var item;
+                    if (co.logo_path) {
+                        item = $('<div class="selector studio-logo-badge" data-id="' + co.id + '" data-name="' + co.name + '"><img src="' + TMDB_IMAGE_URL + co.logo_path + '"></div>');
+                    } else {
+                        item = $('<div class="selector studio-logo-badge text-badge" data-id="' + co.id + '" data-name="' + co.name + '"><span>' + co.name + '</span></div>');
+                    }
+
+                    // 3. Обработка клика/ОК на пульте
+                    item.on('hover:enter', function () {
                         Lampa.Activity.push({
-                            url: 'company/' + id,
-                            title: 'Студия: ' + name,
+                            url: 'company/' + $(this).data('id'),
+                            title: 'Студия: ' + $(this).data('name'),
                             component: 'category_full',
                             source: 'tmdb',
                             card_type: 0,
                             page: 1
                         });
-                    }
+                    });
+
+                    cont.append(item);
                 });
+
+                infoBlock.append(cont);
+
+                // --- КРИТИЧЕСКИЙ МОМЕНТ ДЛЯ ANDROID ---
+                // Сообщаем контроллеру карточки, что появились новые элементы .selector
+                e.object.activity.loader.toggle(false); // На всякий случай скрываем лоадер
+                
+                // Если в Lampa открыта карточка, обновляем навигацию
+                if (Lampa.Controller.enabled().name === 'full_start') {
+                    Lampa.Controller.add('full_start', {
+                        toggle: function () {},
+                        up: function () {},
+                        down: function () {},
+                        right: function () {},
+                        left: function () {},
+                        gone: function () {}
+                    });
+                }
             }
         });
 
-        // Стили адаптированные под Android TV
-        var style = '<style>\
-            .studio-logos-container { \
-                display: flex; \
-                flex-wrap: wrap; \
-                gap: 10px; \
-                margin-top: 15px; \
-                margin-bottom: 10px; \
-                width: 100%; \
-            }\
-            .studio-logo-badge { \
-                background: rgba(255, 255, 255, 0.08); \
-                padding: 6px 12px; \
-                border-radius: 6px; \
-                display: flex; \
-                align-items: center; \
-                justify-content: center; \
-                border: 2px solid transparent; \
-            }\
-            .studio-logo-badge.focus { \
-                background: #fff; \
-                border-color: #fff; \
-                transform: scale(1.05); \
-            }\
-            .studio-logo-badge img { \
-                height: 1.4em; \
-                filter: brightness(0) invert(1); \
-            }\
-            .studio-logo-badge.focus img { \
-                filter: none; \
-            }\
-            .studio-logo-badge.text-badge span { \
-                font-size: 1.3rem; \
-                color: #fff; \
-                font-weight: bold; \
-            }\
-            .studio-logo-badge.focus span { \
-                color: #000; \
-            }\
-        </style>';
-        
-        if (!$('style#studio-logos-style').length) {
-            $('body').append('<div id="studio-logos-style">' + style + '</div>');
+        // Стили
+        if (!$('#studio-style').length) {
+            $('body').append('<style id="studio-style">\
+                .studio-logos-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }\
+                .studio-logo-badge { background: rgba(255,255,255,0.08); padding: 5px 10px; border-radius: 6px; cursor: pointer; }\
+                .studio-logo-badge.focus { background: #fff; transform: scale(1.1); }\
+                .studio-logo-badge img { height: 1.2em; filter: brightness(0) invert(1); display: block; }\
+                .studio-logo-badge.focus img { filter: none; }\
+                .studio-logo-badge.text-badge span { font-size: 1.1rem; color: #fff; font-weight: bold; }\
+                .studio-logo-badge.focus span { color: #000; }\
+            </style>');
         }
     }
 
-    // Запуск с проверкой готовности
+    // Запуск
     if (window.Lampa) {
         startPlugin();
     } else {
