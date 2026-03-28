@@ -1,74 +1,60 @@
 (function () {
     'use strict';
 
-    var L_MOD = 'studio_mod_';
+    var L_MOD = 'studio_mod_v2';
 
-    // Стили с повышенными приоритетами !important
     var styles = `
         .studio-logos-container { 
             display: flex !important; 
-            align-items: center !important; 
             flex-wrap: wrap !important; 
             margin: 15px 0 !important;
             gap: 10px !important;
-            width: 100% !important;
-            position: relative !important;
+            min-height: 30px;
         }
         .rate--studio.studio-logo { 
             display: inline-flex !important; 
             background: rgba(255,255,255,0.1) !important;
-            padding: 8px 12px !important;
-            border-radius: 10px !important;
+            padding: 6px 12px !important;
+            border-radius: 8px !important;
+            border: 2px solid transparent;
         }
         .rate--studio.studio-logo.focus { 
             background: #fff !important; 
-            color: #000 !important;
+            border-color: #ffde1a !important;
         }
         .rate--studio.studio-logo img { 
-            height: 25px !important;
-            object-fit: contain !important; 
+            height: 22px !important;
+            max-width: 120px !important; 
         }
-        .rate--studio.studio-logo.focus img { filter: invert(1) !important; }
-        .studio-logo-text { font-size: 14px !important; color: inherit !important; font-weight: bold; }
+        .rate--studio.studio-logo.focus img { filter: brightness(0) !important; }
+        .studio-logo-text { font-size: 14px !important; color: #fff !important; font-weight: bold; }
+        .rate--studio.studio-logo.focus .studio-logo-text { color: #000 !important; }
     `;
 
     if (!$('style#studio-logo-styles').length) {
         $('head').append('<style id="studio-logo-styles">' + styles + '</style>');
     }
 
-    function render(e) {
-        var movie = e.data.movie;
-        var activity = e.object.activity;
-        var render = activity.render();
-        
-        // 1. Проверка ID
-        var id = movie.id;
-        if (!id) return;
+    function loadStudios(movie, render) {
+        if (render.find('.studio-logos-container').length > 0) return; // Уже загружено
 
-        // 2. Формируем URL (используем прокси, если он есть в Лампе)
         var type = (movie.number_of_seasons || movie.first_air_date) ? 'tv' : 'movie';
-        var api_key = Lampa.TMDB.key();
-        var url = 'https://api.themoviedb.org/3/' + type + '/' + id + '?api_key=' + api_key + '&language=ru';
+        var url = 'https://api.themoviedb.org/3/' + type + '/' + movie.id + '?api_key=' + Lampa.TMDB.key() + '&language=ru';
 
-        // 3. Запрос через нативный метод Lampa (обходим CORS на Android)
+        // Используем базовый метод запроса Lampa для Android
         Lampa.Network.native(url, function(data) {
             if (data && data.production_companies && data.production_companies.length) {
-                
-                // Удаляем старые контейнеры, если они есть
-                render.find('.studio-logos-container').remove();
-
                 var container = $('<div class="studio-logos-container"></div>');
 
                 data.production_companies.slice(0, 4).forEach(function(co) {
                     var item = $('<div class="rate--studio studio-logo selector"></div>');
                     
                     if (co.logo_path) {
-                        item.append('<img src="https://image.tmdb.org/t/p/w300' + co.logo_path + '">');
+                        item.append('<img src="https://image.tmdb.org/t/p/w200' + co.logo_path + '">');
                     } else {
                         item.append('<span class="studio-logo-text">' + co.name + '</span>');
                     }
 
-                    // Клик
                     item.on('hover:enter', function() {
                         Lampa.Activity.push({
                             url: '', 
@@ -84,48 +70,47 @@
                     container.append(item);
                 });
 
-                // 4. Поиск места вставки (пробуем все варианты)
-                var target = render.find('.full-start__buttons, .full-start-new__buttons, .full-start__details, .full-info__content').first();
-                
+                // Ищем место вставки максимально широко
+                var target = render.find('.full-start__buttons, .full-start-new__buttons, .full-info__content, .full-start__details').first();
                 if (target.length) {
                     target.before(container);
-                    
-                    // 5. Перезапуск контроллера для Android
+                    // Обновляем контроллер, чтобы кнопки стали кликабельными
                     Lampa.Controller.add('full_start', {
-                        toggle: function() {
-                            Lampa.Controller.collection(render[0]);
-                        }
+                        toggle: function() { Lampa.Controller.collection(render[0]); }
                     });
-                    Lampa.Controller.toggle('full_start');
+                    // Если мы уже в этом контроллере — обновляем его
+                    if (Lampa.Controller.enabled().name === 'full_start') {
+                        Lampa.Controller.toggle('full_start');
+                    }
                 }
             }
-        }, function() {
-            // Ошибка сети
         });
     }
 
-    // Слушатель
-    Lampa.Listener.follow('full', function (e) {
-        if (e.type === 'complete') {
-            // На Android 1.12.4 нужно подождать чуть дольше
-            setTimeout(function() {
-                render(e);
-            }, 500);
-        }
-    });
+    // Вместо Listener.follow используем перехват открытия активности
+    var old_start = Lampa.Component.get('full').prototype.create;
+    Lampa.Component.get('full').prototype.create = function() {
+        var _this = this;
+        var result = old_start.apply(this, arguments);
+        
+        // Ждем отрисовки карточки
+        setTimeout(function() {
+            var movie = _this.activity.data.movie;
+            var render = _this.activity.render();
+            if (movie && movie.id) {
+                loadStudios(movie, render);
+            }
+        }, 800); // 800мс - гарантированное время для Android v1.12.4
 
-    // Регистрация настроек
+        return result;
+    };
+
+    // Настройки
     function setupSettings() {
         Lampa.SettingsApi.addComponent({
-            component: 'studio_logos_mod',
+            component: 'studio_logos_v2',
             name: 'Логотипы студий',
-            icon: '<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg" fill="white"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM17.99 9l-3.14-4.21-1.32 1.77L15.41 9l-3.88 5.19-1.75-2.1L7.11 15.5l10.88 0z"/></svg>'
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'studio_logos_mod',
-            param: { name: L_MOD + 'enabled', type: 'trigger', default: true },
-            field: { name: 'Включить', description: 'Показывать логотипы компаний' }
+            icon: '<svg height="24" viewBox="0 0 24 24" width="24" fill="white"><path d="M12 2l10 5v10l-10 5-10-5V7l10-5z"/></svg>'
         });
     }
 
