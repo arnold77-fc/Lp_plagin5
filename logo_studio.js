@@ -1,7 +1,57 @@
 (function () {
     'use strict';
 
-    // 1. Стили для логотипов студий
+    // 1. Инициализация настроек
+    Lampa.Storage.set('ymod_studio_show_bg', Lampa.Storage.get('ymod_studio_show_bg', true));
+    Lampa.Storage.set('ymod_studio_size', Lampa.Storage.get('ymod_studio_size', '0.7'));
+    Lampa.Storage.set('ymod_studio_saturation', Lampa.Storage.get('ymod_studio_saturation', '1.0'));
+
+    // 2. Добавление пункта в меню настроек Lampa
+    Lampa.Settings.add({
+        title: 'Настройки логотипов',
+        type: 'book',
+        icon: '<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/><path d="M0 0h24v24H0z" fill="none"/></svg>',
+        name: 'ymod_studios_section'
+    });
+
+    Lampa.Settings.cache.ymod_studios_section = [
+        {
+            title: 'Фон логотипа',
+            name: 'ymod_studio_show_bg',
+            type: 'select',
+            values: {
+                true: 'Показывать',
+                false: 'Скрыть'
+            },
+            default: true
+        },
+        {
+            title: 'Размер логотипа',
+            name: 'ymod_studio_size',
+            type: 'select',
+            values: {
+                '0.5': 'Маленький',
+                '0.7': 'Средний',
+                '0.9': 'Большой',
+                '1.2': 'Очень большой'
+            },
+            default: '0.7'
+        },
+        {
+            title: 'Насыщенность',
+            name: 'ymod_studio_saturation',
+            type: 'select',
+            values: {
+                '0': 'Чёрно-белый',
+                '0.5': 'Приглушенный',
+                '1.0': 'Обычный',
+                '1.5': 'Яркий'
+            },
+            default: '1.0'
+        }
+    ];
+
+    // 3. Стили
     var styles = `
         .plugin-uk-title-combined { 
             margin-top: 10px; 
@@ -49,9 +99,7 @@
     `;
     $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    var studiosCache = {};
-
-    // 2. Функция анализа яркости (инвертирует черные логотипы, чтобы их было видно на темном фоне)
+    // 4. Анализ яркости
     function analyzeAndInvert(img, threshold) {
         try {
             var canvas = document.createElement('canvas');
@@ -78,16 +126,16 @@
         } catch (e) {}
     }
 
-    // 3. Основная функция отрисовки
+    // 5. Отрисовка
     function renderStudiosTitle(render, movie) {
         if (!render) return;
         $(".plugin-uk-title-combined", render).remove();
         
-        // Настройки по умолчанию (можно заменить на фиксированные значения или Lampa.Storage.get)
-        var showBg = true;
-        var sizeEm = '0.7em';
-        var gapEm = '0.2em';
-        var saturation = '1';
+        // Получаем значения из настроек
+        var showBg = Lampa.Storage.get('ymod_studio_show_bg');
+        var sizeEm = Lampa.Storage.get('ymod_studio_size') + 'em';
+        var saturation = Lampa.Storage.get('ymod_studio_saturation');
+        var gapEm = '0.3em';
 
         var html = '';
         if (movie && movie.production_companies) {
@@ -111,36 +159,31 @@
             : 'background: transparent !important; border: none !important; padding: 5px 0px !important; margin-bottom: 0.2em !important;';
 
         var wrap = $('<div class="plugin-uk-title-combined"><div class="studio-logos-container">' + html + '</div></div>');
-        
-        // Поиск места для вставки (после заголовка)
         var target = $(".full-start-new__title, .full-start__title", render);
         target.after(wrap);
 
         $('.rate--studio', render).css('cssText', bgCSS + ' filter: saturate(' + saturation + ');');
         $('.rate--studio img', render).css('cssText', 'height: ' + sizeEm + ' !important;');
 
-        // Запуск проверки цвета после загрузки картинок
         $('.studio-img-check', render).each(function() {
             var img = this;
             if (img.complete) analyzeAndInvert(img, 0.85);
             else img.onload = function() { analyzeAndInvert(img, 0.85); };
         });
 
-        // Клик по логотипу — переход к фильмам студии
         $('.rate--studio', render).on('hover:enter', function () {
             var id = $(this).data('id');
             if (id) Lampa.Activity.push({ url: 'movie', id: id, title: $(this).data('name'), component: 'company', source: 'tmdb', page: 1 });
         });
     }
 
-    // 4. Слушатель событий Lampa
+    // 6. Слушатель
     Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complite' || e.type === 'complete') {
             var card = e.data.movie;
             var render = e.object.activity.render();
             var type = card.first_air_date ? "tv" : "movie";
             
-            // Запрос полных данных о фильме для получения production_companies
             Lampa.Api.sources.tmdb.get(type + "/" + card.id, {}, function (data) {
                 renderStudiosTitle(render, data);
             });
