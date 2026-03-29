@@ -1,146 +1,135 @@
 (function () {
     'use strict';
 
-    // 1. Стили для логотипов студий
+    // 1. Инициализация настроек по умолчанию
+    Lampa.Storage.set('studio_logos_enabled', Lampa.Storage.get('studio_logos_enabled', 'true'));
+    Lampa.Storage.set('studio_logos_background', Lampa.Storage.get('studio_logos_background', 'true'));
+    Lampa.Storage.set('studio_logos_size', Lampa.Storage.get('studio_logos_size', '0.7em'));
+    Lampa.Storage.set('studio_logos_margin', Lampa.Storage.get('studio_logos_margin', '0.2em'));
+    Lampa.Storage.set('studio_logos_saturation', Lampa.Storage.get('studio_logos_saturation', '100%'));
+
+    // 2. Стили (добавлены переменные для динамического размера)
     var styles = `
-        .plugin-uk-title-combined { 
-            margin-top: 10px; 
-            margin-bottom: 5px; 
-            text-align: left; 
-            width: 100%; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: flex-start; 
-        }
-        .studio-logos-container { 
-            display: flex; 
-            align-items: center; 
-            flex-wrap: wrap; 
-        }
-        .rate--studio.studio-logo { 
-            display: inline-flex; 
-            align-items: center; 
-            vertical-align: middle; 
-            border-radius: 8px; 
-            transition: all 0.2s ease; 
-            height: auto; 
-            cursor: pointer; 
-        }
-        .rate--studio.studio-logo.focus { 
-            background: rgba(255,255,255,0.2) !important; 
-            border: 1px solid #fff; 
-            transform: scale(1.05); 
-        }
-        .rate--studio.studio-logo img { 
-            max-width: 200px; 
-            width: auto; 
-            object-fit: contain; 
-        }
-        .studio-logo-text { 
-            font-size: 0.8em; 
-            font-weight: bold; 
-            color: #fff !important; 
-            white-space: nowrap; 
-        }
+        .plugin-uk-title-combined { margin-top: 10px; margin-bottom: 5px; display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
+        .studio-logos-container { display: flex; align-items: center; flex-wrap: wrap; }
+        .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 8px; transition: all 0.2s ease; cursor: pointer; }
+        .rate--studio.studio-logo.focus { background: rgba(255,255,255,0.2) !important; outline: 2px solid #fff; transform: scale(1.05); }
+        .rate--studio.studio-logo img { max-width: 200px; width: auto; object-fit: contain; }
+        .studio-logo-text { font-weight: bold; color: #fff !important; white-space: nowrap; }
         @media screen and (orientation: portrait), screen and (max-width: 767px) {
-            .plugin-uk-title-combined { align-items: center !important; text-align: center !important; }
+            .plugin-uk-title-combined { align-items: center !important; }
             .studio-logos-container { justify-content: center !important; }
         }
     `;
     $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    var studiosCache = {};
+    // 3. Добавление пункта в настройки Lampa
+    Lampa.Settings.listener.follow('open', function (e) {
+        if (e.name == 'main') {
+            var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
+                '<div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" fill="white"/></svg></div>' +
+                '<div class="settings-folder__name">Логотипы студий</div>' +
+                '</div>');
+            
+            item.on('hover:enter', function () {
+                Lampa.Settings.main().render().find('[data-component="studio_logos_settings"]').click();
+            });
+            
+            e.body.find('[data-component="interface"]').after(item);
+        }
+    });
 
-    // 2. Функция анализа яркости (инвертирует черные логотипы, чтобы их было видно на темном фоне)
-    function analyzeAndInvert(img, threshold) {
-        try {
-            var canvas = document.createElement('canvas');
-            var ctx = canvas.getContext('2d');
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            if (canvas.width === 0 || canvas.height === 0) return;
-            ctx.drawImage(img, 0, 0);
-            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            var data = imageData.data;
-            var darkPixels = 0;
-            var totalPixels = 0;
-            for (var i = 0; i < data.length; i += 4) {
-                var alpha = data[i + 3];
-                if (alpha < 10) continue;
-                totalPixels++;
-                var r = data[i], g = data[i + 1], b = data[i + 2];
-                var brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                if (brightness < 120) darkPixels++;
-            }
-            if (totalPixels > 0 && (darkPixels / totalPixels) >= threshold) {
-                img.style.filter += " brightness(0) invert(1)";
-            }
-        } catch (e) {}
-    }
+    // Создание компонента настроек
+    Lampa.Component.add('studio_logos_settings', function (object) {
+        var comp = new Lampa.Settings.component(object);
+        
+        comp.create = function () {
+            this.add({
+                name: 'studio_logos_enabled',
+                type: 'bool',
+                label: 'Увімкнути плагін',
+                descr: 'Відображати логотипи студій',
+                default: true
+            });
+            this.add({
+                name: 'studio_logos_background',
+                type: 'bool',
+                label: 'Підложка',
+                descr: 'Напівпрозорий фон за логотипом',
+                default: true
+            });
+            this.add({
+                name: 'studio_logos_size',
+                type: 'select',
+                label: 'Розмір лого',
+                descr: 'Виберіть розмір іконок',
+                values: {'0.5em': '0.5em', '0.7em': '0.7em (Стандарт)', '0.9em': '0.9em', '1.1em': '1.1em'},
+                default: '0.7em'
+            });
+            this.add({
+                name: 'studio_logos_margin',
+                type: 'select',
+                label: 'Відступ між лого',
+                descr: 'Відстань між елементами',
+                values: {'0.1em': '0.1em', '0.2em': '0.2em', '0.4em': '0.4em'},
+                default: '0.2em'
+            });
+            this.add({
+                name: 'studio_logos_saturation',
+                type: 'select',
+                label: 'Насиченість',
+                descr: 'Кольорова гама логотипів',
+                values: {'0%': '0%', '50%': '50%', '100%': '100%'},
+                default: '100%'
+            });
+        };
+        return comp;
+    });
 
-    // 3. Основная функция отрисовки
+    // 4. Логика отрисовки (использует сохраненные настройки)
     function renderStudiosTitle(render, movie) {
-        if (!render) return;
+        if (!render || Lampa.Storage.get('studio_logos_enabled') === 'false') return;
         $(".plugin-uk-title-combined", render).remove();
         
-        // Настройки по умолчанию (можно заменить на фиксированные значения или Lampa.Storage.get)
-        var showBg = true;
-        var sizeEm = '0.7em';
-        var gapEm = '0.2em';
-        var saturation = '1';
+        var showBg = Lampa.Storage.get('studio_logos_background') === 'true';
+        var sizeEm = Lampa.Storage.get('studio_logos_size');
+        var gapEm = Lampa.Storage.get('studio_logos_margin');
+        var saturation = Lampa.Storage.get('studio_logos_saturation');
 
         var html = '';
         if (movie && movie.production_companies) {
-            var companies = movie.production_companies.slice(0, 3);
-            companies.forEach(function (co, index) {
+            movie.production_companies.slice(0, 4).forEach(function (co) {
                 var content = co.logo_path 
-                    ? '<img src="https://image.tmdb.org/t/p/h100' + co.logo_path + '" title="' + co.name + '" crossorigin="anonymous" class="studio-img-check">' 
-                    : '<span class="studio-logo-text">' + co.name + '</span>';
+                    ? '<img src="https://image.tmdb.org/t/p/h100' + co.logo_path + '" crossorigin="anonymous" class="studio-img-check">' 
+                    : '<span class="studio-logo-text" style="font-size:'+sizeEm+'">' + co.name + '</span>';
                 
-                if (!showBg && index > 0) {
-                    html += '<span style="color: rgba(255,255,255,0.4); margin: 0 ' + gapEm + '; font-size: 0.6em; display: inline-flex; align-items: center;">●</span>';
-                }
-
-                html += '<div class="rate--studio studio-logo ymod-studio-item" data-id="' + co.id + '" data-name="' + co.name + '" style="display: inline-flex; vertical-align: middle;">' + content + '</div>';
+                html += '<div class="rate--studio studio-logo selector" data-id="' + co.id + '" data-name="' + co.name + '">' + content + '</div>';
             });
         }
         if (!html) return;
 
-        var bgCSS = showBg 
-            ? 'background: rgba(255,255,255,0.08) !important; padding: 5px 12px !important; margin-right: ' + gapEm + ' !important;' 
-            : 'background: transparent !important; border: none !important; padding: 5px 0px !important; margin-bottom: 0.2em !important;';
-
+        var bgStyle = showBg ? 'background: rgba(255,255,255,0.1); padding: 5px 10px; margin-right: '+gapEm+';' : 'margin-right: '+gapEm+';';
         var wrap = $('<div class="plugin-uk-title-combined"><div class="studio-logos-container">' + html + '</div></div>');
         
-        // Поиск места для вставки (после заголовка)
         var target = $(".full-start-new__title, .full-start__title", render);
         target.after(wrap);
 
-        $('.rate--studio', render).css('cssText', bgCSS + ' filter: saturate(' + saturation + ');');
-        $('.rate--studio img', render).css('cssText', 'height: ' + sizeEm + ' !important;');
+        $('.rate--studio', wrap).attr('style', bgStyle + 'filter: saturate(' + saturation + ');');
+        $('.rate--studio img', wrap).css('height', sizeEm);
 
-        // Запуск проверки цвета после загрузки картинок
-        $('.studio-img-check', render).each(function() {
-            var img = this;
-            if (img.complete) analyzeAndInvert(img, 0.85);
-            else img.onload = function() { analyzeAndInvert(img, 0.85); };
-        });
-
-        // Клик по логотипу — переход к фильмам студии
-        $('.rate--studio', render).on('hover:enter', function () {
+        // Навигация пультом
+        wrap.find('.selector').on('hover:enter', function () {
             var id = $(this).data('id');
-            if (id) Lampa.Activity.push({ url: 'movie', id: id, title: $(this).data('name'), component: 'company', source: 'tmdb', page: 1 });
+            Lampa.Activity.push({ url: 'company/' + id, title: $(this).data('name'), component: 'category_full', source: 'tmdb', card_type: 0 });
         });
     }
 
-    // 4. Слушатель событий Lampa
     Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complite' || e.type === 'complete') {
             var card = e.data.movie;
             var render = e.object.activity.render();
-            var type = card.first_air_date ? "tv" : "movie";
+            var type = (card.first_air_date || card.number_of_seasons) ? "tv" : "movie";
             
-            // Запрос полных данных о фильме для получения production_companies
             Lampa.Api.sources.tmdb.get(type + "/" + card.id, {}, function (data) {
                 renderStudiosTitle(render, data);
             });
