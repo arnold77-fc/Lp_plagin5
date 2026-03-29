@@ -31,11 +31,6 @@
             border: 1px solid #fff; 
             transform: scale(1.05); 
         }
-        .rate--studio.studio-logo img { 
-            max-width: 200px; 
-            width: auto; 
-            object-fit: contain; 
-        }
         @media screen and (orientation: portrait), screen and (max-width: 767px) {
             .plugin-uk-title-combined { align-items: center !important; text-align: center !important; }
             .studio-logos-container { justify-content: center !important; }
@@ -46,31 +41,14 @@
     }
 
     // --- БЛОК НАСТРОЕК ---
-    
-    Lampa.Settings.listener.follow('open', function (e) {
-        if (e.name == 'main') {
-            var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
-                '<div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" fill="white"/></svg></div>' +
-                '<div class="settings-folder__name">Логотипы студий</div>' +
-                '</div>');
-            
-            item.on('hover:enter', function () {
-                Lampa.Component.add('studio_logos_settings', StudioSettings);
-                Lampa.Activity.push({
-                    url: '',
-                    title: 'Логотипы студий',
-                    component: 'studio_logos_settings',
-                    page: 1
-                });
-            });
-            e.body.append(item);
-        }
-    });
 
     function StudioSettings(object) {
-        var comp = new Lampa.InteractionMain(object);
-        
-        comp.create = function () {
+        var network = new Lampa.Reguest();
+        var scroll = new Lampa.Scroll({mask:true, over:true});
+        var items = [];
+        var active = 0;
+
+        this.create = function () {
             var _this = this;
             this.activity.loader(false);
             
@@ -90,7 +68,7 @@
                         Lampa.Storage.set('studio_logo_size', a.value);
                         item_size.find('.settings-param__value').text(a.value + ' em');
                     },
-                    onBack: () => Lampa.Controller.toggle(_this.components.content)
+                    onBack: () => Lampa.Controller.toggle(_this.render())
                 });
             });
 
@@ -102,21 +80,20 @@
                 '</div>');
 
             item_sat.on('hover:enter', function () {
-                var values = [
-                    {title: 'Ч/Б (0%)', value: '0.0'},
-                    {title: 'Приглушенные (0.5)', value: '0.5'},
-                    {title: 'Норма (1.0)', value: '1.0'},
-                    {title: 'Яркие (1.5)', value: '1.5'},
-                    {title: 'Максимум (2.0)', value: '2.0'}
-                ];
                 Lampa.Select.show({
                     title: 'Насыщенность',
-                    items: values,
+                    items: [
+                        {title: 'Ч/Б (0%)', value: '0.0'},
+                        {title: 'Приглушенные (0.5)', value: '0.5'},
+                        {title: 'Норма (1.0)', value: '1.0'},
+                        {title: 'Яркие (1.5)', value: '1.5'},
+                        {title: 'Максимум (2.0)', value: '2.0'}
+                    ],
                     onSelect: function (a) {
                         Lampa.Storage.set('studio_logo_sat', a.value);
                         item_sat.find('.settings-param__value').text((a.value * 100) + '%');
                     },
-                    onBack: () => Lampa.Controller.toggle(_this.components.content)
+                    onBack: () => Lampa.Controller.toggle(_this.render())
                 });
             });
 
@@ -135,18 +112,55 @@
                         Lampa.Storage.set('studio_logo_bg', a.value);
                         item_bg.find('.settings-param__value').text(a.value == 'true' ? 'Да' : 'Нет');
                     },
-                    onBack: () => Lampa.Controller.toggle(_this.components.content)
+                    onBack: () => Lampa.Controller.toggle(_this.render())
                 });
             });
 
-            this.append(item_size);
-            this.append(item_sat);
-            this.append(item_bg);
+            scroll.append(item_size);
+            scroll.append(item_sat);
+            scroll.append(item_bg);
+            
+            this.items = [item_size, item_sat, item_bg];
         };
-        return comp;
+
+        this.render = function () {
+            return scroll.render();
+        };
+
+        this.pause = function () {};
+        this.resume = function () {
+            Lampa.Controller.enabled().items = this.items;
+            Lampa.Controller.enabled().active = this.items[0];
+        };
+        this.destroy = function () {
+            scroll.destroy();
+            network.clear();
+        };
     }
 
-    // --- ЛОГИКА ОТРИСОВКИ ---
+    // Регистрация компонента
+    Lampa.Component.add('studio_logos_settings', StudioSettings);
+
+    // Добавляем в главное меню настроек
+    Lampa.Settings.listener.follow('open', function (e) {
+        if (e.name == 'main') {
+            var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
+                '<div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" fill="white"/></svg></div>' +
+                '<div class="settings-folder__name">Логотипы студий</div>' +
+                '</div>');
+            
+            item.on('hover:enter', function () {
+                Lampa.Activity.push({
+                    title: 'Логотипы студий',
+                    component: 'studio_logos_settings',
+                    page: 1
+                });
+            });
+            e.body.append(item);
+        }
+    });
+
+    // --- ЛОГИКА ОТРИСОВКИ В КАРТОЧКЕ ---
 
     function analyzeAndInvert(img, threshold) {
         try {
@@ -158,8 +172,7 @@
             ctx.drawImage(img, 0, 0);
             var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             var data = imageData.data;
-            var darkPixels = 0;
-            var totalPixels = 0;
+            var darkPixels = 0, totalPixels = 0;
             for (var i = 0; i < data.length; i += 4) {
                 if (data[i + 3] < 10) continue;
                 totalPixels++;
@@ -179,12 +192,10 @@
         var sizeEm = Lampa.Storage.get('studio_logo_size', '0.7') + 'em';
         var saturation = Lampa.Storage.get('studio_logo_sat', '1.0');
         var showBg = Lampa.Storage.get('studio_logo_bg', 'true') == 'true';
-        var gapEm = '0.3em';
 
         var html = '';
         if (movie && movie.production_companies) {
-            var companies = movie.production_companies.slice(0, 3);
-            companies.forEach(function (co) {
+            movie.production_companies.slice(0, 3).forEach(function (co) {
                 var content = co.logo_path 
                     ? '<img src="https://image.tmdb.org/t/p/h100' + co.logo_path + '" crossorigin="anonymous" class="studio-img-check">' 
                     : '<span class="studio-logo-text" style="font-size: 0.8em; padding: 0 5px;">' + co.name + '</span>';
@@ -195,8 +206,8 @@
         if (!html) return;
 
         var bgStyle = showBg 
-            ? 'background: rgba(255,255,255,0.1) !important; padding: 4px 10px !important; margin-right: '+gapEm+' !important;' 
-            : 'background: transparent !important; border: none !important; padding: 2px 0px !important; margin-right: '+gapEm+' !important;';
+            ? 'background: rgba(255,255,255,0.1) !important; padding: 4px 10px !important; margin-right: 0.3em !important;' 
+            : 'background: transparent !important; border: none !important; padding: 2px 0px !important; margin-right: 0.3em !important;';
 
         var wrap = $('<div class="plugin-uk-title-combined"><div class="studio-logos-container">' + html + '</div></div>');
         var target = $(".full-start-new__title, .full-start__title", render);
