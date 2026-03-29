@@ -1,3 +1,4 @@
+
 (function () {
     'use strict';
 
@@ -72,7 +73,7 @@
         if (!render) return;
         $(".plugin-uk-title-combined", render).remove();
         
-        var showBg = Lampa.Storage.field('ymod_studios_show_bg') !== false; // по умолчанию true
+        var showBg = Lampa.Storage.get('ymod_studios_show_bg', true);
         var sizeVal = (Lampa.Storage.get('ymod_studios_size', '0.7')) + 'em';
         var saturation = (Lampa.Storage.get('ymod_studios_saturation', '100')) / 100;
 
@@ -116,27 +117,7 @@
         });
     }
 
-    // 4. Интеграция в настройки Lampa
-    Lampa.Settings.listener.follow('open', function (e) {
-        if (e.name === 'main') {
-            var field = $(`<div class="settings-folder selector" data-component="ymod_studios_settings">
-                <div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10z" fill="white"/></svg></div>
-                <div class="settings-folder__title">Логотипы студий</div>
-                <div class="settings-folder__subtitle">Настройка отображения брендов</div>
-            </div>`);
-            
-            field.on('hover:enter', function () {
-                Lampa.Component.add('ymod_studios_settings', StudioSettings);
-                Lampa.Activity.push({
-                    component: 'ymod_studios_settings',
-                    title: 'Логотипы студий'
-                });
-            });
-            e.body.append(field);
-        }
-    });
-
-    // 5. Компонент страницы настроек
+    // 4. Компонент страницы настроек (регистрируем заранее)
     function StudioSettings(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [
@@ -163,21 +144,28 @@
                 var val = Lampa.Storage.get(item.name, item.default);
                 var view = Lampa.Template.get('settings_field', item);
                 
-                if (item.type === 'bool') view.find('.settings-field__value').text(val ? 'Да' : 'Нет');
-                else view.find('.settings-field__value').text(item.values[val] || val);
+                var updateValue = function(current) {
+                    if (item.type === 'bool') view.find('.settings-field__value').text(current ? 'Да' : 'Нет');
+                    else view.find('.settings-field__value').text(item.values[current] || current);
+                };
+
+                updateValue(val);
 
                 view.on('hover:enter', function () {
                     if (item.type === 'bool') {
                         val = !Lampa.Storage.get(item.name, item.default);
                         Lampa.Storage.set(item.name, val);
-                        view.find('.settings-field__value').text(val ? 'Да' : 'Нет');
+                        updateValue(val);
                     } else {
                         Lampa.Select.show({
                             title: item.title,
                             items: Object.keys(item.values).map(k => ({title: item.values[k], value: k})),
                             onSelect: function (a) {
                                 Lampa.Storage.set(item.name, a.value);
-                                view.find('.settings-field__value').text(a.title);
+                                updateValue(a.value);
+                            },
+                            onBack: function(){
+                                Lampa.Controller.toggle('settings_component');
                             }
                         });
                     }
@@ -190,6 +178,27 @@
         this.pause = function () {};
         this.destroy = function () { scroll.destroy(); };
     }
+
+    // Регистрация компонента
+    Lampa.Component.add('ymod_studios_settings', StudioSettings);
+
+    // 5. Интеграция в настройки интерфейса
+    Lampa.Settings.listener.follow('open', function (e) {
+        if (e.name === 'interface') { // Перенесено в пункт Интерфейс
+            var field = $(`<div class="settings-field selector" data-component="ymod_studios_settings">
+                <div class="settings-field__title">Логотипы студий</div>
+                <div class="settings-field__descr">Настройка отображения брендов компаний</div>
+            </div>`);
+            
+            field.on('hover:enter', function () {
+                Lampa.Activity.push({
+                    component: 'ymod_studios_settings',
+                    title: 'Логотипы студий'
+                });
+            });
+            e.body.find('.settings-list').append(field);
+        }
+    });
 
     // 6. Слушатель карточки
     Lampa.Listener.follow('full', function(e) {
