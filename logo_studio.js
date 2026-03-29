@@ -3,14 +3,14 @@
 
     // 1. Регистрация настроек в меню Lampa
     Lampa.Settings.listener.follow('open', function (e) {
-        if (e.name == 'interface') { // Добавляем в раздел "Интерфейс" или можно создать свой
+        if (e.name == 'interface') {
             var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
                 '<div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="currentColor"/></svg></div>' +
                 '<div class="settings-folder__name">Логотипы студий</div>' +
                 '</div>');
 
             item.on('hover:enter', function () {
-                Lampa.Component.add('studio_logos_settings', StudioSettings); // Вызываем компонент настроек
+                Lampa.Component.add('studio_logos_settings', StudioSettings);
                 Lampa.Activity.push({
                     url: '',
                     title: 'Логотипы студий',
@@ -22,17 +22,13 @@
         }
     });
 
-    // 2. Компонент панели настроек (как на скриншоте)
+    // 2. Исправленный компонент панели настроек
     function StudioSettings(object) {
-        var network = new Lampa.Reguest();
         var scroll = new Lampa.Scroll({mask: true, over: true});
-        var files = new Lampa.Files(object);
-        var html = $('<div></div>');
+        var html = $('<div class="settings-list"></div>');
         
         this.create = function () {
             var _this = this;
-            
-            // Пункты настроек
             var menu = [
                 {
                     title: 'Увімкнути плагін',
@@ -75,7 +71,7 @@
                 var val = Lampa.Storage.get(m.param, m.default);
                 var item = $('<div class="settings-param selector" data-type="select">' +
                     '<div class="settings-param__name">' + m.title + '</div>' +
-                    '<div class="settings-param__value">' + m.values[val] + '</div>' +
+                    '<div class="settings-param__value">' + (m.values[val] || val) + '</div>' +
                     '<div class="settings-param__descr">' + m.subtitle + '</div>' +
                     '</div>');
 
@@ -86,14 +82,30 @@
                         onSelect: function(a){
                             Lampa.Storage.set(m.param, a.value);
                             item.find('.settings-param__value').text(a.title);
+                            Lampa.Controller.toggle('settings_studio'); 
                         },
-                        onBack: function(){ Lampa.Controller.toggle('settings_project'); }
+                        onBack: function(){ 
+                            Lampa.Controller.toggle('settings_studio'); 
+                        }
                     });
                 });
                 html.append(item);
             });
 
             scroll.append(html);
+        };
+
+        this.start = function () {
+            Lampa.Controller.add('settings_studio', {
+                toggle: function () {
+                    Lampa.Controller.collectionSet(scroll.render());
+                    Lampa.Controller.collectionFocus(false, scroll.render());
+                },
+                up: Lampa.Navigator.move.bind(Lampa.Navigator, 'up'),
+                down: Lampa.Navigator.move.bind(Lampa.Navigator, 'down'),
+                back: Lampa.Activity.backward
+            });
+            Lampa.Controller.toggle('settings_studio');
         };
 
         this.render = function () { return scroll.render(); };
@@ -106,17 +118,19 @@
     var styles = `
         .plugin-uk-title-combined { margin-top: 10px; margin-bottom: 5px; display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
         .studio-logos-container { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
-        .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 6px; transition: all 0.2s ease; }
-        .rate--studio.studio-logo img { width: auto; object-fit: contain; }
-        .studio-logo-text { font-size: 0.8em; font-weight: bold; color: #fff; }
+        .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 6px; transition: all 0.2s ease; overflow: hidden; }
+        .rate--studio.studio-logo img { width: auto; object-fit: contain; display: block; }
+        .studio-logo-text { font-size: 0.8em; font-weight: bold; color: #fff; white-space: nowrap; }
         @media screen and (max-width: 767px) {
             .plugin-uk-title-combined { align-items: center; text-align: center; }
             .studio-logos-container { justify-content: center; }
         }
     `;
-    $('head').append('<style>' + styles + '</style>');
+    if (!$('style#studio-logos-styles').length) {
+        $('head').append('<style id="studio-logos-styles">' + styles + '</style>');
+    }
 
-    // 4. Логика отрисовки (модифицирована под чтение настроек)
+    // 4. Логика отрисовки
     function renderStudiosTitle(render, movie) {
         if (Lampa.Storage.get('studio_logos_enabled', 'true') === 'false') return;
 
@@ -149,9 +163,10 @@
     // 5. Инициализация
     Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complete') {
-            Lampa.Api.sources.tmdb.get((e.data.movie.number_of_seasons ? "tv" : "movie") + "/" + e.data.movie.id, {}, function (data) {
+            var type = (e.data.movie.number_of_seasons || e.data.movie.first_air_date) ? "tv" : "movie";
+            Lampa.Api.sources.tmdb.get(type + "/" + e.data.movie.id, {}, function (data) {
                 renderStudiosTitle(e.object.activity.render(), data);
-            });
+            }, function(){});
         }
     });
 
