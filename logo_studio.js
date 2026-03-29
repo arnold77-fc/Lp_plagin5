@@ -90,24 +90,18 @@
                 item.append('<span class="studio-logo-text">' + company.name + '</span>');
             }
 
-            // Функция перехода
-            var openStudio = function() {
-                Lampa.Activity.push({ 
-                    url: '', 
-                    id: company.id, 
-                    title: company.name, 
-                    component: 'category_full', 
-                    type: 'movie',
-                    method: 'company',
-                    source: 'tmdb', 
-                    page: 1 
-                });
-            };
-
-            // Клик для перехода к фильмам студии (Пульт + Мышь/Тач)
-            item.on('hover:enter click', function(e) {
+            // Обработка нажатия
+            item.on('hover:enter click', function (e) {
                 e.preventDefault();
-                openStudio();
+                Lampa.Activity.push({
+                    url: 'discover/movie',
+                    title: 'Студия: ' + company.name,
+                    component: 'category_full',
+                    with_companies: company.id,
+                    source: 'tmdb',
+                    card_type: 0,
+                    page: 1
+                });
             });
 
             container.append(item);
