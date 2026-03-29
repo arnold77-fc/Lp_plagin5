@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    // 1. Регистрация настроек в меню Lampa
+    // 1. Регистрация настроек
     Lampa.Settings.listener.follow('open', function (e) {
         if (e.name == 'interface') {
             var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
@@ -22,7 +22,7 @@
         }
     });
 
-    // 2. Исправленный компонент панели настроек
+    // 2. Компонент панели настроек с исправленной навигацией
     function StudioSettings(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var html = $('<div class="settings-list"></div>');
@@ -48,7 +48,7 @@
                     title: 'Розмір лого',
                     subtitle: 'Стандарт 0.7em',
                     param: 'studio_logos_size',
-                    values: { '0.5em': '0.5em', '0.7em': '0.7em (Стандарт)', '0.9em': '0.9em', '1.2em': '1.2em' },
+                    values: { '0.5em': '0.5em', '0.7em': '0.7em', '0.9em': '0.9em', '1.1em': '1.1em', '1.3em': '1.3em' },
                     default: '0.7em'
                 },
                 {
@@ -91,7 +91,6 @@
                 });
                 html.append(item);
             });
-
             scroll.append(html);
         };
 
@@ -101,9 +100,9 @@
                     Lampa.Controller.collectionSet(scroll.render());
                     Lampa.Controller.collectionFocus(false, scroll.render());
                 },
-                up: Lampa.Navigator.move.bind(Lampa.Navigator, 'up'),
-                down: Lampa.Navigator.move.bind(Lampa.Navigator, 'down'),
-                back: Lampa.Activity.backward
+                up: function() { Lampa.Navigator.move('up'); },
+                down: function() { Lampa.Navigator.move('down'); },
+                back: function() { Lampa.Activity.backward(); }
             });
             Lampa.Controller.toggle('settings_studio');
         };
@@ -121,16 +120,12 @@
         .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 6px; transition: all 0.2s ease; overflow: hidden; }
         .rate--studio.studio-logo img { width: auto; object-fit: contain; display: block; }
         .studio-logo-text { font-size: 0.8em; font-weight: bold; color: #fff; white-space: nowrap; }
-        @media screen and (max-width: 767px) {
-            .plugin-uk-title-combined { align-items: center; text-align: center; }
-            .studio-logos-container { justify-content: center; }
-        }
     `;
     if (!$('style#studio-logos-styles').length) {
         $('head').append('<style id="studio-logos-styles">' + styles + '</style>');
     }
 
-    // 4. Логика отрисовки
+    // 4. Отрисовка
     function renderStudiosTitle(render, movie) {
         if (Lampa.Storage.get('studio_logos_enabled', 'true') === 'false') return;
 
@@ -169,5 +164,4 @@
             }, function(){});
         }
     });
-
 })();
