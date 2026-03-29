@@ -1,87 +1,102 @@
-    // 3. Добавление пункта в настройки Lampa
-    function addSettingsItem() {
-        if ($('.settings [data-component="studio_logos_settings"]').length > 0) return;
+(function () {
+    'use strict';
 
-        var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
-            '<div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" fill="white"/></svg></div>' +
-            '<div class="settings-folder__name">Логотипи студій</div>' +
-            '</div>');
+    // 1. Инициализация хранилища (если пусто)
+    var storage = {
+        enabled: Lampa.Storage.get('studio_logos_enabled', 'true'),
+        background: Lampa.Storage.get('studio_logos_background', 'true'),
+        size: Lampa.Storage.get('studio_logos_size', '0.7em'),
+        margin: Lampa.Storage.get('studio_logos_margin', '0.2em'),
+        saturation: Lampa.Storage.get('studio_logos_saturation', '100%')
+    };
 
-        item.on('hover:enter', function () {
-            Lampa.Component.add('studio_logos_settings', StudioSettings); // Регистрируем компонент перед вызовом
-            Lampa.Select.show({
-                container: 'settings',
-                component: 'studio_logos_settings',
-                onBack: function () {
-                    Lampa.Controller.toggle('settings');
-                }
-            });
-        });
-
-        // Пытаемся вставить после "Интерфейса" или в конец списка
-        var target = $('.settings [data-component="interface"]');
-        if (target.length > 0) target.after(item);
-        else $('.settings__content').append(item);
-        
-        // Обновляем навигацию, чтобы пульт "увидел" новый пункт
-        if (window.Lampa.Controller.active().name === 'settings') {
-            Lampa.Controller.enable('settings');
+    // 2. Стили
+    var styles = `
+        .plugin-uk-title-combined { margin-top: 10px; margin-bottom: 5px; display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
+        .studio-logos-container { display: flex; align-items: center; flex-wrap: wrap; }
+        .rate--studio.studio-logo { display: inline-flex; align-items: center; border-radius: 8px; transition: all 0.2s ease; cursor: pointer; }
+        .rate--studio.studio-logo.focus { background: rgba(255,255,255,0.2) !important; outline: 2px solid #fff; transform: scale(1.05); }
+        .rate--studio.studio-logo img { max-width: 200px; width: auto; object-fit: contain; }
+        .studio-logo-text { font-weight: bold; color: #fff !important; white-space: nowrap; }
+        @media screen and (orientation: portrait), screen and (max-width: 767px) {
+            .plugin-uk-title-combined { align-items: center !important; }
+            .studio-logos-container { justify-content: center !important; }
         }
-    }
+    `;
+    $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    // Слушатель для отрисовки при открытии настроек
-    Lampa.Listener.follow('app', function (e) {
-        if (e.type === 'ready') {
-            Lampa.Settings.listener.follow('open', function (en) {
-                if (en.name === 'main') {
-                    setTimeout(addSettingsItem, 10); // Небольшая задержка для рендера DOM
-                }
-            });
+    // 3. Создание компонента настроек через Lampa.Params
+    Lampa.Params.select('studio_logos_size', {'0.5em': '0.5em', '0.7em': '0.7em (Стандарт)', '0.9em': '0.9em', '1.1em': '1.1em'}, '0.7em');
+    Lampa.Params.select('studio_logos_margin', {'0.1em': '0.1em', '0.2em': '0.2em', '0.4em': '0.4em'}, '0.2em');
+    Lampa.Params.select('studio_logos_saturation', {'0%': '0%', '50%': '50%', '100%': '100%'}, '100%');
+
+    // 4. Добавление в меню Настройки -> Интерфейс (самый стабильный путь)
+    Lampa.Settings.listener.follow('open', function (e) {
+        if (e.name == 'interface') {
+            var title = $('<div class="settings-param title selector">Логотипи студій</div>');
+            
+            var btn_enabled = Lampa.Settings.main().render().find('[data-name="interface_size"]').clone().attr('data-name', 'studio_logos_enabled');
+            btn_enabled.find('.settings-param__name').text('Увімкнути плагін');
+            btn_enabled.find('.settings-param__descr').text('Відображати логотипи студій');
+            btn_enabled.find('.settings-param__value').text(Lampa.Storage.get('studio_logos_enabled') == 'true' ? 'Так' : 'Ні');
+
+            var btn_bg = btn_enabled.clone().attr('data-name', 'studio_logos_background');
+            btn_bg.find('.settings-param__name').text('Підложка');
+            btn_bg.find('.settings-param__descr').text('Напівпрозорий фон за логотипом');
+            btn_bg.find('.settings-param__value').text(Lampa.Storage.get('studio_logos_background') == 'true' ? 'Так' : 'Ні');
+
+            // Обработка кликов (переключатели Да/Нет)
+            var toggle = function(name, btn) {
+                var current = Lampa.Storage.get(name, 'true') == 'true';
+                Lampa.Storage.set(name, !current);
+                btn.find('.settings-param__value').text(!current ? 'Так' : 'Ні');
+            };
+
+            btn_enabled.on('hover:enter', function() { toggle('studio_logos_enabled', btn_enabled); });
+            btn_bg.on('hover:enter', function() { toggle('studio_logos_background', btn_bg); });
+
+            // Добавляем выбор размеров и прочего через стандартный Lampa.Select
+            var createSelect = function(name, label, descr) {
+                var btn = btn_enabled.clone().attr('data-name', name);
+                btn.find('.settings-param__name').text(label);
+                btn.find('.settings-param__descr').text(descr);
+                btn.find('.settings-param__value').text(Lampa.Storage.get(name));
+                
+                btn.on('hover:enter', function(){
+                    Lampa.Select.show({
+                        title: label,
+                        items: Lampa.Params.values[name],
+                        onSelect: function(item){
+                            Lampa.Storage.set(name, item.value);
+                            btn.find('.settings-param__value').text(item.value);
+                            Lampa.Controller.toggle('settings');
+                        },
+                        onBack: function(){ Lampa.Controller.toggle('settings'); }
+                    });
+                });
+                return btn;
+            };
+
+            var btn_size = createSelect('studio_logos_size', 'Розмір лого', 'Виберіть розмір іконок');
+            var btn_margin = createSelect('studio_logos_margin', 'Відступ між лого', 'Відстань між елементами');
+            var btn_sat = createSelect('studio_logos_saturation', 'Насиченість', 'Кольорова гама логотипів');
+
+            e.body.append(title);
+            e.body.append(btn_enabled);
+            e.body.append(btn_bg);
+            e.body.append(btn_size);
+            e.body.append(btn_margin);
+            e.body.append(btn_sat);
+            
+            Lampa.Controller.enable('settings');
         }
     });
 
-    // Определение компонента настроек (вынесено в переменную)
-    var StudioSettings = function (object) {
-        var comp = new Lampa.Settings.component(object);
-        comp.create = function () {
-            this.add({
-                name: 'studio_logos_enabled',
-                type: 'bool',
-                label: 'Увімкнути плагін',
-                descr: 'Відображати логотипи студій',
-                default: true
-            });
-            this.add({
-                name: 'studio_logos_background',
-                type: 'bool',
-                label: 'Підложка',
-                descr: 'Напівпрозорий фон за логотипом',
-                default: true
-            });
-            this.add({
-                name: 'studio_logos_size',
-                type: 'select',
-                label: 'Розмір лого',
-                descr: 'Виберіть розмір іконок',
-                values: {'0.5em': '0.5em', '0.7em': '0.7em', '0.9em': '0.9em', '1.1em': '1.1em'},
-                default: '0.7em'
-            });
-            this.add({
-                name: 'studio_logos_margin',
-                type: 'select',
-                label: 'Відступ між лого',
-                descr: 'Відстань між елементами',
-                values: {'0.1em': '0.1em', '0.2em': '0.2em', '0.4em': '0.4em'},
-                default: '0.2em'
-            });
-            this.add({
-                name: 'studio_logos_saturation',
-                type: 'select',
-                label: 'Насиченість',
-                descr: 'Кольорова гама логотипів',
-                values: {'0%': '0%', '50%': '50%', '100%': '100%'},
-                default: '100%'
-            });
-        };
-        return comp;
-    };
+    // 5. Логика отрисовки на странице фильма
+    function renderStudiosTitle(render, movie) {
+        if (!render || Lampa.Storage.get('studio_logos_enabled') === 'false') return;
+        $(".plugin-uk-title-combined", render).remove();
+        
+        var showBg = Lampa.Storage.get('studio_logos_background') === 'true';
+        var sizeEm = Lampa.Storage.get('studio_logos_size', '0.7em');
+        var gapEm =
