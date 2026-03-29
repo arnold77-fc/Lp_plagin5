@@ -40,17 +40,15 @@
         $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
     }
 
-    // --- БЛОК НАСТРОЕК ---
+    // --- КОМПОНЕНТ НАСТРОЕК ---
 
     function StudioSettings(object) {
         var network = new Lampa.Reguest();
         var scroll = new Lampa.Scroll({mask:true, over:true});
         var items = [];
-        var active = 0;
 
         this.create = function () {
             var _this = this;
-            this.activity.loader(false);
             
             // 1. Размер
             var size = Lampa.Storage.get('studio_logo_size', '0.7');
@@ -123,25 +121,30 @@
             this.items = [item_size, item_sat, item_bg];
         };
 
-        this.render = function () {
-            return scroll.render();
+        // Тот самый метод, которого не хватало
+        this.start = function () {
+            Lampa.Controller.add('content', {
+                toggle: () => {
+                    Lampa.Controller.collectionSet(this.render());
+                    Lampa.Controller.collectionFocus(this.items[0], this.render());
+                },
+                left: () => { Lampa.Controller.toggle('menu'); },
+                up: () => { Lampa.Controller.collectionPrev(); },
+                down: () => { Lampa.Controller.collectionNext(); },
+                back: () => { Lampa.Activity.backward(); }
+            });
+            Lampa.Controller.toggle('content');
         };
 
+        this.render = function () { return scroll.render(); };
         this.pause = function () {};
-        this.resume = function () {
-            Lampa.Controller.enabled().items = this.items;
-            Lampa.Controller.enabled().active = this.items[0];
-        };
-        this.destroy = function () {
-            scroll.destroy();
-            network.clear();
-        };
+        this.resume = function () { Lampa.Controller.toggle('content'); };
+        this.destroy = function () { scroll.destroy(); network.clear(); };
     }
 
-    // Регистрация компонента
+    // Регистрация
     Lampa.Component.add('studio_logos_settings', StudioSettings);
 
-    // Добавляем в главное меню настроек
     Lampa.Settings.listener.follow('open', function (e) {
         if (e.name == 'main') {
             var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
