@@ -45,7 +45,6 @@
     `;
     $('head').append('<style id="studio-logos-styles">' + styles + '</style>');
 
-    // Автоматическая инверсия черных логотипов для темной темы Lampa
     function invertDarkLogo(img) {
         try {
             var canvas = document.createElement('canvas');
@@ -56,7 +55,7 @@
             var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
             var dark = 0, total = 0;
             for (var i = 0; i < data.length; i += 4) {
-                if (data[i+3] > 20) { // Пропускаем прозрачные пиксели
+                if (data[i+3] > 20) {
                     total++;
                     var brightness = (data[i] * 299 + data[i+1] * 587 + data[i+2] * 114) / 1000;
                     if (brightness < 128) dark++;
@@ -66,7 +65,6 @@
         } catch(e) {}
     }
 
-    // Отрисовка блока студий
     function renderStudios(renderTarget, movie) {
         if (!renderTarget || !movie.production_companies || movie.production_companies.length === 0) return;
         
@@ -78,6 +76,9 @@
 
         var container = $('<div class="plugin-studio-logos"></div>');
         
+        // Определяем тип контента (фильм или сериал) для правильного поиска
+        var isTV = (movie.number_of_seasons || movie.first_air_date) ? true : false;
+
         movie.production_companies.slice(0, 3).forEach(function(company) {
             var bgStyle = useBg ? 'background: rgba(255,255,255,0.1); padding: 5px 12px;' : 'padding: 5px 0;';
             var item = $('<div class="studio-logo-item" style="' + bgStyle + ' filter: saturate(' + saturation + ');"></div>');
@@ -90,17 +91,19 @@
                 item.append('<span class="studio-logo-text">' + company.name + '</span>');
             }
 
-            // Обработка нажатия
-            item.on('hover:enter click', function (e) {
+            // Исправленный переход: используем фильтр discover
+            item.on('hover:enter click', function(e) {
                 e.preventDefault();
+                e.stopPropagation();
+                
                 Lampa.Activity.push({
-                    url: 'discover/movie',
-                    title: 'Студия: ' + company.name,
+                    url: isTV ? 'discover/tv' : 'discover/movie',
+                    title: company.name,
                     component: 'category_full',
-                    with_companies: company.id,
-                    source: 'tmdb',
-                    card_type: 0,
-                    page: 1
+                    page: 1,
+                    genres: '', // Сбрасываем жанры
+                    with_companies: company.id, // Ключевой параметр для студий
+                    source: 'tmdb'
                 });
             });
 
@@ -111,7 +114,6 @@
         if (titleBlock.length) titleBlock.after(container);
     }
 
-    // Подписка на событие открытия карточки
     Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complite' || e.type === 'complete') {
             if (Lampa.Storage.get(STORAGE_KEY + 'enabled', true)) {
@@ -125,7 +127,6 @@
 
     function render(target, data) {
         renderStudios(target, data);
-        // Делаем элементы доступными для выбора пультом
         setTimeout(function() {
             var items = target.find('.studio-logo-item:not(.selector)');
             if (items.length) {
@@ -138,7 +139,6 @@
         }, 500);
     }
 
-    // Регистрация настроек
     function initSettings() {
         Lampa.SettingsApi.addComponent({ component: 'studio_logos_settings', name: 'Логотипы студий' });
 
