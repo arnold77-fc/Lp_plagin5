@@ -90,17 +90,26 @@
                 item.append('<span class="studio-logo-text">' + company.name + '</span>');
             }
 
-            // Клик для перехода к фильмам студии
-            item.on('hover:enter', function() {
+            // Функция перехода
+            var openStudio = function() {
                 Lampa.Activity.push({ 
-                    url: 'movie', 
+                    url: '', 
                     id: company.id, 
                     title: company.name, 
-                    component: 'company', 
+                    component: 'category_full', 
+                    type: 'movie',
+                    method: 'company',
                     source: 'tmdb', 
                     page: 1 
                 });
+            };
+
+            // Клик для перехода к фильмам студии (Пульт + Мышь/Тач)
+            item.on('hover:enter click', function(e) {
+                e.preventDefault();
+                openStudio();
             });
+
             container.append(item);
         });
 
