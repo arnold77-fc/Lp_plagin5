@@ -1,4 +1,3 @@
-
 (function () {
     'use strict';
 
@@ -48,7 +47,7 @@
     `;
     $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    // 2. Функция инверсии темных логотипов
+    // 2. Функция инверсии лого
     function analyzeAndInvert(img, threshold) {
         try {
             var canvas = document.createElement('canvas');
@@ -68,7 +67,7 @@
         } catch (e) {}
     }
 
-    // 3. Отрисовка
+    // 3. Отрисовка в карточке
     function renderStudiosTitle(render, movie) {
         if (!render) return;
         $(".plugin-uk-title-combined", render).remove();
@@ -117,7 +116,7 @@
         });
     }
 
-    // 4. Компонент страницы настроек (регистрируем заранее)
+    // 4. Компонент настроек
     function StudioSettings(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [
@@ -140,29 +139,31 @@
 
         this.create = function () {
             var _this = this;
+            var list = $('<div class="settings-list"></div>');
+            
             items.forEach(function (item) {
                 var val = Lampa.Storage.get(item.name, item.default);
                 var view = Lampa.Template.get('settings_field', item);
                 
-                var updateValue = function(current) {
-                    if (item.type === 'bool') view.find('.settings-field__value').text(current ? 'Да' : 'Нет');
-                    else view.find('.settings-field__value').text(item.values[current] || current);
+                var update = function(v) {
+                    if (item.type === 'bool') view.find('.settings-field__value').text(v ? 'Да' : 'Нет');
+                    else view.find('.settings-field__value').text(item.values[v] || v);
                 };
-
-                updateValue(val);
+                update(val);
 
                 view.on('hover:enter', function () {
                     if (item.type === 'bool') {
                         val = !Lampa.Storage.get(item.name, item.default);
                         Lampa.Storage.set(item.name, val);
-                        updateValue(val);
+                        update(val);
                     } else {
                         Lampa.Select.show({
                             title: item.title,
                             items: Object.keys(item.values).map(k => ({title: item.values[k], value: k})),
                             onSelect: function (a) {
                                 Lampa.Storage.set(item.name, a.value);
-                                updateValue(a.value);
+                                update(a.value);
+                                Lampa.Controller.toggle('settings_component'); 
                             },
                             onBack: function(){
                                 Lampa.Controller.toggle('settings_component');
@@ -170,8 +171,9 @@
                         });
                     }
                 });
-                scroll.append(view);
+                list.append(view);
             });
+            scroll.append(list);
             return scroll.render();
         };
         this.render = function () { return this.create(); };
@@ -182,21 +184,26 @@
     // Регистрация компонента
     Lampa.Component.add('ymod_studios_settings', StudioSettings);
 
-    // 5. Интеграция в настройки интерфейса
+    // 5. Интеграция в Интерфейс (Исправлено для Android)
     Lampa.Settings.listener.follow('open', function (e) {
-        if (e.name === 'interface') { // Перенесено в пункт Интерфейс
-            var field = $(`<div class="settings-field selector" data-component="ymod_studios_settings">
-                <div class="settings-field__title">Логотипы студий</div>
-                <div class="settings-field__descr">Настройка отображения брендов компаний</div>
-            </div>`);
-            
-            field.on('hover:enter', function () {
-                Lampa.Activity.push({
-                    component: 'ymod_studios_settings',
-                    title: 'Логотипы студий'
+        if (e.name === 'interface') {
+            setTimeout(function() {
+                var field = $('<div class="settings-field selector" data-component="ymod_studios_settings"><div class="settings-field__title">Логотипы студий</div><div class="settings-field__descr">Настройка брендов в карточке фильма</div></div>');
+                
+                field.on('hover:enter', function () {
+                    Lampa.Activity.push({
+                        component: 'ymod_studios_settings',
+                        title: 'Логотипы студий'
+                    });
                 });
-            });
-            e.body.find('.settings-list').append(field);
+
+                // Вставляем после любого существующего элемента в списке
+                var container = e.body.find('.settings-list');
+                if (container.length) container.append(field);
+                
+                // Переинициализируем контроллер, чтобы новая кнопка стала кликабельной
+                Lampa.Controller.enable('settings_interface');
+            }, 10);
         }
     });
 
@@ -206,7 +213,7 @@
             var type = e.data.movie.first_air_date ? "tv" : "movie";
             Lampa.Api.sources.tmdb.get(type + "/" + e.data.movie.id, {}, function (data) {
                 renderStudiosTitle(e.object.activity.render(), data);
-            });
+            }, function(){});
         }
     });
 
