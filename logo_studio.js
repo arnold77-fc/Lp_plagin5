@@ -49,9 +49,15 @@
     `;
     $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    var studiosCache = {};
+    // Инициализация дефолтных настроек в Storage
+    Lampa.Storage.set('studio_logo_enabled', Lampa.Storage.get('studio_logo_enabled', true));
+    Lampa.Storage.set('studio_logo_backdrop', Lampa.Storage.get('studio_logo_backdrop', true));
+    Lampa.Storage.set('studio_logo_count', Lampa.Storage.get('studio_logo_count', '3'));
+    Lampa.Storage.set('studio_logo_size', Lampa.Storage.get('studio_logo_size', '0.7'));
+    Lampa.Storage.set('studio_logo_margin', Lampa.Storage.get('studio_logo_margin', '0.2'));
+    Lampa.Storage.set('studio_logo_saturation', Lampa.Storage.get('studio_logo_saturation', '100'));
 
-    // 2. Функция анализа яркости (инвертирует черные логотипы, чтобы их было видно на темном фоне)
+    // 2. Функция анализа яркости
     function analyzeAndInvert(img, threshold) {
         try {
             var canvas = document.createElement('canvas');
@@ -80,18 +86,18 @@
 
     // 3. Основная функция отрисовки
     function renderStudiosTitle(render, movie) {
-        if (!render) return;
+        if (!render || !Lampa.Storage.get('studio_logo_enabled')) return;
         $(".plugin-uk-title-combined", render).remove();
         
-        // Настройки по умолчанию (можно заменить на фиксированные значения или Lampa.Storage.get)
-        var showBg = true;
-        var sizeEm = '0.7em';
-        var gapEm = '0.2em';
-        var saturation = '1';
+        var showBg = Lampa.Storage.get('studio_logo_backdrop');
+        var maxCount = parseInt(Lampa.Storage.get('studio_logo_count'));
+        var sizeEm = Lampa.Storage.get('studio_logo_size') + 'em';
+        var gapEm = Lampa.Storage.get('studio_logo_margin') + 'em';
+        var saturation = Lampa.Storage.get('studio_logo_saturation') / 100;
 
         var html = '';
         if (movie && movie.production_companies) {
-            var companies = movie.production_companies.slice(0, 3);
+            var companies = movie.production_companies.slice(0, maxCount);
             companies.forEach(function (co, index) {
                 var content = co.logo_path 
                     ? '<img src="https://image.tmdb.org/t/p/h100' + co.logo_path + '" title="' + co.name + '" crossorigin="anonymous" class="studio-img-check">' 
@@ -112,35 +118,99 @@
 
         var wrap = $('<div class="plugin-uk-title-combined"><div class="studio-logos-container">' + html + '</div></div>');
         
-        // Поиск места для вставки (после заголовка)
         var target = $(".full-start-new__title, .full-start__title", render);
         target.after(wrap);
 
         $('.rate--studio', render).css('cssText', bgCSS + ' filter: saturate(' + saturation + ');');
         $('.rate--studio img', render).css('cssText', 'height: ' + sizeEm + ' !important;');
 
-        // Запуск проверки цвета после загрузки картинок
         $('.studio-img-check', render).each(function() {
             var img = this;
             if (img.complete) analyzeAndInvert(img, 0.85);
             else img.onload = function() { analyzeAndInvert(img, 0.85); };
         });
 
-        // Клик по логотипу — переход к фильмам студии
         $('.rate--studio', render).on('hover:enter', function () {
             var id = $(this).data('id');
             if (id) Lampa.Activity.push({ url: 'movie', id: id, title: $(this).data('name'), component: 'company', source: 'tmdb', page: 1 });
         });
     }
 
-    // 4. Слушатель событий Lampa
+    // 4. Добавление пункта настроек
+    function addSettings() {
+        Lampa.Settings.main().render().find('[data-component="plugins"]').after('<div class="settings-list__item selector" data-component="studio_logos"> <div class="settings-list__name">Логотипы студий</div> </div>');
+
+        Lampa.Settings.listener.follow('open', function (e) {
+            if (e.name === 'studio_logos') {
+                var items = [
+                    {
+                        title: 'Включить плагин',
+                        subtitle: 'Отображать логотипы студий производства',
+                        type: 'bool',
+                        name: 'studio_logo_enabled',
+                        value: true
+                    },
+                    {
+                        title: 'Количество логотипов',
+                        subtitle: 'Сколько студий выводить в карточке',
+                        type: 'select',
+                        name: 'studio_logo_count',
+                        value: '3',
+                        values: { '1': '1', '2': '2', '3': '3 (Стандарт)', '4': '4', '5': '5' }
+                    },
+                    {
+                        title: 'Подложка',
+                        subtitle: 'Полупрозрачный фон за логотипом',
+                        type: 'bool',
+                        name: 'studio_logo_backdrop',
+                        value: true
+                    },
+                    {
+                        title: 'Размер логотипа',
+                        subtitle: 'Высота значка в единицах em',
+                        type: 'select',
+                        name: 'studio_logo_size',
+                        value: '0.7',
+                        values: { '0.5': '0.5em', '0.6': '0.6em', '0.7': '0.7em (Стандарт)', '0.9': '0.9em', '1.1': '1.1em' }
+                    },
+                    {
+                        title: 'Отступ между лого',
+                        subtitle: 'Расстояние между иконками',
+                        type: 'select',
+                        name: 'studio_logo_margin',
+                        value: '0.2',
+                        values: { '0.1': '0.1em', '0.2': '0.2em (Стандарт)', '0.4': '0.4em', '0.6': '0.6em' }
+                    },
+                    {
+                        title: 'Насыщенность',
+                        subtitle: 'Цветность логотипов студий',
+                        type: 'select',
+                        name: 'studio_logo_saturation',
+                        value: '100',
+                        values: { '0': 'Черно-белое', '50': '50%', '100': '100% (Оригинал)', '150': '150%' }
+                    }
+                ];
+
+                var html = Lampa.Settings.create(items);
+                
+                html.on('change', function (event) {
+                    Lampa.Storage.set(event.name, event.value);
+                });
+
+                e.body.append(html);
+            }
+        });
+    }
+
+    if (window.appready) addSettings();
+    else Lampa.Listener.follow('app', function (e) { if (e.type == 'ready') addSettings(); });
+
     Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complite' || e.type === 'complete') {
             var card = e.data.movie;
             var render = e.object.activity.render();
             var type = card.first_air_date ? "tv" : "movie";
             
-            // Запрос полных данных о фильме для получения production_companies
             Lampa.Api.sources.tmdb.get(type + "/" + card.id, {}, function (data) {
                 renderStudiosTitle(render, data);
             });
