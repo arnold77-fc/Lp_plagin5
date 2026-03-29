@@ -1,14 +1,12 @@
 (function () {
     'use strict';
 
-    // 1. Регистрация в меню
+    // 1. Настройки
     Lampa.Settings.listener.follow('open', function (e) {
         if (e.name == 'interface') {
             var item = $('<div class="settings-folder selector" data-component="studio_logos_settings">' +
-                '<div class="settings-folder__icon"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="currentColor"/></svg></div>' +
                 '<div class="settings-folder__name">Логотипы студий</div>' +
                 '</div>');
-
             item.on('hover:enter', function () {
                 Lampa.Component.add('studio_logos_settings', StudioSettings);
                 Lampa.Activity.push({ title: 'Логотипы студий', component: 'studio_logos_settings', page: 1 });
@@ -17,16 +15,11 @@
         }
     });
 
-    // 2. Компонент настроек
     function StudioSettings(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var html = $('<div class="settings-list"></div>');
         this.create = function () {
-            var menu = [
-                { title: 'Увімкнути плагін', param: 'studio_logos_enabled', values: { 'true': 'Да', 'false': 'Нет' }, default: 'true' },
-                { title: 'Підложка', param: 'studio_logos_bg', values: { 'true': 'Да', 'false': 'Нет' }, default: 'true' },
-                { title: 'Розмір лого', param: 'studio_logos_size', values: { '0.6em': 'Маленький', '0.8em': 'Средний', '1.1em': 'Большой' }, default: '0.8em' }
-            ];
+            var menu = [{ title: 'Увімкнути', param: 'studio_logos_enabled', values: { 'true': 'Да', 'false': 'Нет' }, default: 'true' }];
             menu.forEach(function(m){
                 var val = Lampa.Storage.get(m.param, m.default);
                 var item = $('<div class="settings-param selector"><div class="settings-param__name">' + m.title + '</div><div class="settings-param__value">' + (m.values[val] || val) + '</div></div>');
@@ -52,46 +45,63 @@
         this.destroy = function () { scroll.destroy(); html.remove(); };
     }
 
-    // 3. Стили (добавлен принудительный z-index)
-    $('head').append('<style>.plugin-studio-logos { margin: 10px 0; display: block; position: relative; z-index: 10; }.studio-container { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }.studio-item { display: inline-flex; align-items: center; border-radius: 4px; background: rgba(255,255,255,0.1); padding: 4px 8px; }.studio-item img { height: 1em; width: auto; display: block; }.studio-text { font-size: 0.7em; font-weight: bold; color: #fff; text-transform: uppercase; letter-spacing: 1px; }</style>');
+    // 2. Стили
+    $('head').append('<style>.plugin-studio-logos { margin: 10px 0; display: block; clear: both; }.studio-container { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }.studio-item { background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 4px; display: inline-flex; }.studio-item img { height: 18px; width: auto; }.studio-text { font-size: 12px; color: #fff; font-weight: bold; }</style>');
 
-    // 4. Функция отрисовки
+    // 3. Отрисовка
     function draw(render, companies) {
         if (Lampa.Storage.get('studio_logos_enabled', 'true') === 'false') return;
         render.find('.plugin-studio-logos').remove();
 
-        var size = Lampa.Storage.get('studio_logos_size', '0.8em');
-        var bg = Lampa.Storage.get('studio_logos_bg', 'true') === 'true' ? '' : 'background:none;padding:0;';
         var items = '';
-
-        companies.slice(0, 4).forEach(function(co) {
-            var content = co.logo_path 
-                ? '<img src="https://image.tmdb.org/t/p/w200' + co.logo_path + '" style="height:'+size+'" onerror="$(this).replaceWith(\'<span class=\\\'studio-text\\\'>'+co.name+'</span>\')"/>' 
-                : '<span class="studio-text">' + co.name + '</span>';
-            items += '<div class="studio-item" style="'+bg+'">' + content + '</div>';
+        companies.forEach(function(co) {
+            if (co.logo_path) {
+                items += '<div class="studio-item"><img src="https://image.tmdb.org/t/p/w200' + co.logo_path + '" onerror="$(this).replaceWith(\'<span class=\\\'studio-text\\\'>'+co.name+'</span>\')"/></div>';
+            } else {
+                items += '<div class="studio-item"><span class="studio-text">' + co.name + '</span></div>';
+            }
         });
 
         if (items) {
             var html = $('<div class="plugin-studio-logos"><div class="studio-container">' + items + '</div></div>');
-            var title = render.find('.full-start__title, .full-start-new__title, .full-info__title, h1').first();
-            if (title.length) title.after(html);
+            // Пробуем все возможные варианты вставки
+            var containers = ['.full-start__title', '.full-start-new__title', '.full-info__title', '.full-start__info', '.full-info__content', 'h1'];
+            var found = false;
+            for (var i = 0; i < containers.length; i++) {
+                var t = render.find(containers[i]).first();
+                if (t.length) {
+                    t.after(html);
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) render.prepend(html); // Если ничего не нашли, кидаем в самый верх
         }
     }
 
-    // 5. Инициализация
+    // 4. Логика получения данных
     Lampa.Listener.follow('full', function (e) {
         if (e.type == 'complete') {
             var movie = e.data.movie;
             var render = e.object.activity.render();
+            var id = movie.id;
+
+            // Если зашли через другой источник, ID может быть не от TMDB. Пытаемся найти TMDB ID.
+            var tmdb_id = movie.tmdb_id || (movie.source === 'tmdb' ? movie.id : false);
             
-            // Пытаемся взять данные из уже загруженного объекта
-            if (movie.production_companies && movie.production_companies.length) {
-                draw(render, movie.production_companies);
-            } else {
-                // Если в объекте нет, делаем запрос
+            if (tmdb_id || id) {
+                var target_id = tmdb_id || id;
                 var type = (movie.number_of_seasons || movie.first_air_date) ? 'tv' : 'movie';
-                Lampa.Api.sources.tmdb.get(type + '/' + movie.id, {}, function (data) {
-                    if (data.production_companies) draw(render, data.production_companies);
+                
+                // Делаем прямой запрос к API TMDB, игнорируя локальные данные
+                $.ajax({
+                    url: 'https://api.themoviedb.org/3/' + type + '/' + target_id + '?api_key=4ef0d359654458cfde28733903876d73&language=ru-RU',
+                    method: 'GET',
+                    success: function(res) {
+                        if (res.production_companies && res.production_companies.length) {
+                            draw(render, res.production_companies.slice(0, 4));
+                        }
+                    }
                 });
             }
         }
