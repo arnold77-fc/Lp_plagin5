@@ -40,14 +40,10 @@
             width: auto; 
             object-fit: contain; 
         }
-        @media screen and (orientation: portrait), screen and (max-width: 767px) {
-            .plugin-uk-title-combined { align-items: center !important; text-align: center !important; }
-            .studio-logos-container { justify-content: center !important; }
-        }
     `;
     $('head').append('<style id="ymod-studio-styles">' + styles + '</style>');
 
-    // 2. Функция инверсии лого
+    // 2. Функция инверсии
     function analyzeAndInvert(img, threshold) {
         try {
             var canvas = document.createElement('canvas');
@@ -184,28 +180,31 @@
     // Регистрация компонента
     Lampa.Component.add('ymod_studios_settings', StudioSettings);
 
-    // 5. Интеграция в Интерфейс (Исправлено для Android)
-    Lampa.Settings.listener.follow('open', function (e) {
-        if (e.name === 'interface') {
-            setTimeout(function() {
-                var field = $('<div class="settings-field selector" data-component="ymod_studios_settings"><div class="settings-field__title">Логотипы студий</div><div class="settings-field__descr">Настройка брендов в карточке фильма</div></div>');
-                
-                field.on('hover:enter', function () {
-                    Lampa.Activity.push({
-                        component: 'ymod_studios_settings',
-                        title: 'Логотипы студий'
-                    });
+    // 5. Интеграция в пункт "Интерфейс" через подмену метода (для Android)
+    var origInterface = Lampa.Settings.main;
+    Lampa.Settings.main = function(render) {
+        origInterface.apply(this, arguments);
+        
+        // Если открыт раздел Интерфейс
+        if (render.find('[data-component="interface"]').length || $('.settings-list', render).length) {
+            var field = $('<div class="settings-field selector" data-component="ymod_studios_settings"><div class="settings-field__title">Логотипы студий</div><div class="settings-field__descr">Настройка брендов в карточке фильма</div></div>');
+            
+            field.on('hover:enter', function () {
+                Lampa.Activity.push({
+                    component: 'ymod_studios_settings',
+                    title: 'Логотипы студий'
                 });
+            });
 
-                // Вставляем после любого существующего элемента в списке
-                var container = e.body.find('.settings-list');
-                if (container.length) container.append(field);
-                
-                // Переинициализируем контроллер, чтобы новая кнопка стала кликабельной
-                Lampa.Controller.enable('settings_interface');
-            }, 10);
+            // Находим список настроек и добавляем в конец
+            var list = render.find('.settings-list');
+            if (list.length) {
+                list.append(field);
+                // Обновляем контроллер, чтобы кнопка стала доступна для пульта
+                Lampa.Controller.enable('settings_component');
+            }
         }
-    });
+    };
 
     // 6. Слушатель карточки
     Lampa.Listener.follow('full', function(e) {
