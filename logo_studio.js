@@ -116,23 +116,19 @@
         if (titleBlock.length) titleBlock.after(container);
     }
 
-    Lampa.Listener.follow('full', function(e) {
+        Lampa.Listener.follow('full', function(e) {
         if (e.type === 'complite' || e.type === 'complete') {
             if (Lampa.Storage.get(STORAGE_KEY + 'enabled', true)) {
                 var movie = e.data.movie;
                 var type = (movie.number_of_seasons || movie.first_air_date) ? 'tv' : 'movie';
                 
-                Lampa.Network.silent(Lampa.TMDB.api(type + '/' + movie.id + '?api_key=' + Lampa.TMDB.key()), function(fullData) {
+                Lampa.Network.silent(Lampa.TMDB.api(type + '/' + movie.id + '?api_key=' + Lampa.TMDB.key() + '&language=' + Lampa.Storage.get('language','ru')), function(fullData) {
                     var renderTarget = e.object.activity.render();
                     renderStudios(renderTarget, fullData);
                     
-                    // Обновляем контроллер навигации, чтобы новые кнопки стали кликабельными
-                    Lampa.Controller.add('full_start', {
-                        toggle: function () {
-                            Lampa.Controller.collectionSet(renderTarget);
-                            Lampa.Controller.enable('full_start');
-                        }
-                    });
+                    // Вместо Lampa.Controller.add просто обновляем коллекцию элементов
+                    // Это заставит Lampa пересканировать экран на наличие новых кнопок .selector
+                    Lampa.Controller.collectionSet(renderTarget);
                 });
             }
         }
