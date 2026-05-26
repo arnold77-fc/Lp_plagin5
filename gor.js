@@ -3,70 +3,81 @@
 
     if (typeof Lampa === 'undefined') return;
 
-    // Стили только для трансформации карточек в горизонтальный формат
-    var style = `
-        /* Основной контейнер карточки */
-        body .card.card--horizontal, 
-        body .card--collection.card--horizontal {
-            width: 25em !important; /* Ширина постера как на фото */
-            height: 14em !important;
-        }
-
-        /* Настройка изображения внутри */
-        body .card--horizontal .card__view {
-            padding-bottom: 56.25% !important; /* Соотношение 16:9 */
-            border-radius: 0.8em;
-            overflow: hidden;
-        }
-
-        body .card--horizontal .card__img {
-            object-fit: cover !important;
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        /* Скрытие лишних деталей, если они мешают Aop.js */
-        body .card--horizontal .card__title {
-            font-size: 1.2em;
-            margin-top: 0.5em;
-        }
-    `;
-
-    // Функция внедрения стилей
-    function injectStyles() {
-        if (document.getElementById('horizontal-poster-mode')) return;
-        var styleTag = document.createElement('style');
-        styleTag.id = 'horizontal-poster-mode';
-        styleTag.innerHTML = style;
-        document.head.appendChild(styleTag);
-    }
-
-    // Принудительная установка класса horizontal для всех карточек в списках
-    function applyHorizontalClass() {
-        var items = document.querySelectorAll('.card:not(.card--horizontal)');
-        items.forEach(function(card) {
-            // Проверяем, не является ли это специфичным элементом, который трогать нельзя
-            if (!card.classList.contains('card--person')) {
-                card.classList.add('card--horizontal');
+    // 1. Добавляем стили для трансформации карточек
+    var styleId = 'horizontal-poster-style';
+    if (!document.getElementById(styleId)) {
+        var style = document.createElement('style');
+        style.id = styleId;
+        style.innerHTML = `
+            /* Стили применяются только когда включен класс .bit-horizontal-mode */
+            body.bit-horizontal-mode .card:not(.card--person) {
+                width: 20em !important;
             }
-        });
+            body.bit-horizontal-mode .card:not(.card--person) .card__view {
+                padding-bottom: 56.25% !important;
+                border-radius: 0.6em !important;
+                overflow: hidden !important;
+            }
+            body.bit-horizontal-mode .card:not(.card--person) .card__img {
+                object-fit: cover !important;
+                top: 0 !important;
+                height: 100% !important;
+            }
+            /* Совместимость с эффектами Apple TV (Aop.js) */
+            body.bit-horizontal-mode.appletv-agnative-topnav .card {
+                margin-bottom: 2em !important;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
-    // Запуск
-    function start() {
-        injectStyles();
-        
-        // Наблюдатель за появлением новых карточек (скролл)
-        var observer = new MutationObserver(function() {
-            applyHorizontalClass();
-        });
+    // 2. Логика переключения режима
+    function applyMode() {
+        var enabled = Lampa.Storage.get('horizontal_mode_simple', 'false') === 'true';
+        if (enabled) {
+            document.body.classList.add('bit-horizontal-mode');
+        } else {
+            document.body.classList.remove('bit-horizontal-mode');
+        }
 
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        
-        applyHorizontalClass();
+        // Подменяем метод проверки горизонтальности для самой Лампы
+        var original = Lampa.Helper.isDisplayHorizontal;
+        Lampa.Helper.isDisplayHorizontal = function() {
+            if (Lampa.Storage.get('horizontal_mode_simple', 'false') === 'true') return true;
+            return original.apply(this, arguments);
+        };
+    }
+
+    // 3. Создание пункта в настройках (Интерфейс)
+    Lampa.Settings.listener.follow('open', function (e) {
+        if (e.name === 'interface') {
+            var item = $('<div class="settings-param selector" data-name="horizontal_mode_simple" data-type="toggle">' +
+                '<div class="settings-param__name">Горизонтальные постеры</div>' +
+                '<div class="settings-param__value"></div>' +
+                '<div class="settings-param__descr">Отображать карточки в формате 16:9 (Стиль Apple TV)</div>' +
+            '</div>');
+
+            item.on('hover:enter', function () {
+                var current = Lampa.Storage.get('horizontal_mode_simple', 'false');
+                var newValue = current === 'true' ? 'false' : 'true';
+                Lampa.Storage.set('horizontal_mode_simple', newValue);
+                Lampa.Settings.update();
+                applyMode();
+                
+                // Перерисовываем текущий экран для мгновенного эффекта
+                if (Lampa.Activity.active()) {
+                    Lampa.Activity.active().activity.render();
+                }
+            });
+
+            // Вставляем настройку после выбора типа карточек
+            e.body.find('[data-name="card_view"]').after(item);
+        }
+    });
+
+    // Запуск при загрузке приложения
+    function start() {
+        applyMode();
     }
 
     if (window.appready) start();
