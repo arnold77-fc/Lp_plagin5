@@ -3,105 +3,65 @@
 
     if (typeof Lampa === 'undefined') return;
 
-    // 1. Добавляем параметр в систему настроек Lampa
-    // Это "правильный" способ, который не ломает навигацию пультом
+    // Регистрация параметра
     Lampa.Params.select('horizontal_mode_simple', [
-        {
-            caption: 'Выключено',
-            val: 'false'
-        },
-        {
-            caption: 'Включено',
-            val: 'true'
-        }
+        { caption: 'Выключено', val: 'false' },
+        { caption: 'Включено', val: 'true' }
     ], 'false');
 
-    // 2. Функция применения стилей
-    function applyHorizontalMode() {
-        var enabled = Lampa.Storage.get('horizontal_mode_simple', 'false') === 'true';
-        
-        if (enabled) {
-            document.body.classList.add('bit-horizontal-mode');
-        } else {
-            document.body.classList.remove('bit-horizontal-mode');
+    // Функция стилей
+    function applyStyles() {
+        if (!document.getElementById('horiz-mode-css')) {
+            var s = document.createElement('style');
+            s.id = 'horiz-mode-css';
+            s.innerHTML = `
+                body.bit-horizontal-mode .card:not(.card--person) { width: 20em !important; }
+                body.bit-horizontal-mode .card:not(.card--person) .card__view { padding-bottom: 56.25% !important; border-radius: 0.6em !important; overflow: hidden !important; }
+                body.bit-horizontal-mode .card:not(.card--person) .card__img { object-fit: cover !important; top: 0 !important; height: 100% !important; }
+            `;
+            document.head.appendChild(s);
         }
-
-        // Подменяем тип отображения для движка Lampa
-        var original = Lampa.Helper.isDisplayHorizontal;
+        
+        var enabled = Lampa.Storage.get('horizontal_mode_simple', 'false') === 'true';
+        document.body.classList.toggle('bit-horizontal-mode', enabled);
+        
+        // Подмена метода
         Lampa.Helper.isDisplayHorizontal = function() {
-            if (Lampa.Storage.get('horizontal_mode_simple', 'false') === 'true') return true;
-            return original ? original.apply(this, arguments) : false;
+            return Lampa.Storage.get('horizontal_mode_simple', 'false') === 'true';
         };
     }
 
-    // 3. CSS для постеров 16:9
-    var styleId = 'horizontal-poster-style';
-    if (!document.getElementById(styleId)) {
-        var style = document.createElement('style');
-        style.id = styleId;
-        style.innerHTML = `
-            body.bit-horizontal-mode .card:not(.card--person) {
-                width: 20em !important;
-            }
-            body.bit-horizontal-mode .card:not(.card--person) .card__view {
-                padding-bottom: 56.25% !important;
-                border-radius: 0.6em !important;
-                overflow: hidden !important;
-            }
-            body.bit-horizontal-mode .card:not(.card--person) .card__img {
-                object-fit: cover !important;
-                top: 0 !important;
-                height: 100% !important;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    // 4. Вставка в меню настроек
+    // Вставка в настройки
     Lampa.Settings.listener.follow('open', function (e) {
         if (e.name === 'interface') {
-            var item = $('<div class="settings-param selector" data-name="horizontal_mode_simple" data-type="select">' +
-                '<div class="settings-param__name">Горизонтальные постеры</div>' +
-                '<div class="settings-param__value"></div>' +
-                '<div class="settings-param__descr">Отображать карточки в формате 16:9</div>' +
-            '</div>');
+            // Ищем элемент, внутри которого есть текст "Язык интерфейса"
+            var target = e.body.find('.settings-param__name').filter(function() {
+                return $(this).text().toLowerCase().indexOf('язык') !== -1;
+            }).closest('.settings-param');
 
-            // Слушаем изменение значения
-            item.on('hover:enter', function () {
-                Lampa.Select.show({
-                    title: 'Горизонтальные постеры',
-                    items: Lampa.Params.values('horizontal_mode_simple'),
-                    onSelect: function (newVal) {
-                        Lampa.Storage.set('horizontal_mode_simple', newVal.val);
-                        Lampa.Settings.update();
-                        applyHorizontalMode();
-                        
-                        // Перерисовываем интерфейс
-                        if (Lampa.Activity.active() && Lampa.Activity.active().activity.render) {
-                            Lampa.Activity.active().activity.render();
+            if (target.length) {
+                var item = $('<div class="settings-param selector" data-name="horizontal_mode_simple">' +
+                    '<div class="settings-param__name">Горизонтальные постеры</div>' +
+                    '<div class="settings-param__value"></div>' +
+                    '</div>');
+
+                item.on('hover:enter', function () {
+                    Lampa.Select.show({
+                        title: 'Горизонтальные постеры',
+                        items: Lampa.Params.values('horizontal_mode_simple'),
+                        onSelect: function (a) {
+                            Lampa.Storage.set('horizontal_mode_simple', a.val);
+                            Lampa.Settings.update();
+                            applyStyles();
                         }
-                    },
-                    onBack: function () {
-                        Lampa.Controller.toggle('settings_interface');
-                    }
+                    });
                 });
-            });
 
-            // Ищем пункт "Язык интерфейса" (language) и вставляем строго под ним
-            var languageItem = e.body.find('[data-name="language"]');
-            if (languageItem.length) {
-                languageItem.after(item);
-            } else {
-                e.body.append(item);
+                // Вставляем именно после найденного элемента
+                target.after(item);
             }
         }
     });
 
-    // Запуск при старте
-    if (window.appready) applyHorizontalMode();
-    else {
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') applyHorizontalMode();
-        });
-    }
+    applyStyles();
 })();
