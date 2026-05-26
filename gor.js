@@ -1,117 +1,112 @@
 (function () {
     'use strict';
 
-    function CleanHeroBanner() {
-        var banner;
-        var lastImg = '';
+    function initDynamicCleanPoster() {
+        if (window.dynamicCleanPosterLoaded) return;
+        window.dynamicCleanPosterLoaded = true;
 
-        // Создаем элементы баннера и стили
-        this.init = function () {
-            if ($('#clean-hero-banner').length) return;
+        // 1. Создаем HTML для нашего чистого постера
+        var posterHTML = `
+            <div id="dynamic-clean-poster">
+                <img class="dcp-image" src="" alt="">
+                <div class="dcp-mask"></div>
+            </div>
+        `;
+        $('body').prepend(posterHTML);
 
-            // HTML структура баннера
-            banner = $(`
-                <div id="clean-hero-banner">
-                    <div class="ch-image"></div>
-                    <div class="ch-mask"></div>
-                </div>
-            `);
+        // 2. Добавляем стили
+        var css = `
+            /* Стили для самого постера */
+            #dynamic-clean-poster {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 55vh; /* Высота постера */
+                z-index: 0;   /* Находится позади интерфейса Apple TV и карточек */
+                pointer-events: none;
+            }
+            .dcp-image {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                object-position: center 20%;
+                opacity: 0;
+                transition: opacity 0.6s ease-in-out; /* Плавная смена */
+            }
+            /* Градиент снизу, чтобы постер плавно уходил в цвет фона */
+            .dcp-mask {
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(to top, #141414 0%, rgba(20,20,20,0.4) 20%, transparent 100%);
+            }
 
-            $('body').append(banner);
+            /* 3. Скрываем стандартный текст, но ТОЛЬКО в лентах, не ломая страницу фильма */
+            body:not(.is-movie-page) .full-start > *,
+            body:not(.is-movie-page) .full-start-new > * {
+                display: none !important;
+            }
+            
+            /* Оставляем блок как невидимую "распорку", чтобы карточки были внизу */
+            body:not(.is-movie-page) .full-start,
+            body:not(.is-movie-page) .full-start-new {
+                height: 55vh !important;
+                background: transparent !important;
+            }
+        `;
+        var style = document.createElement('style');
+        style.innerHTML = css;
+        document.head.appendChild(style);
 
-            // CSS стили
-            var style = `
-                <style id="clean-hero-style">
-                    #clean-hero-banner {
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 65vh; /* Высота баннера */
-                        z-index: -1;
-                        background: #141414;
-                        overflow: hidden;
-                        pointer-events: none;
-                    }
-                    .ch-image {
-                        width: 100%;
-                        height: 100%;
-                        background-size: cover;
-                        background-position: center 20%;
-                        transition: opacity 0.6s ease-in-out, transform 0.6s ease-in-out;
-                        opacity: 0;
-                        transform: scale(1.05);
-                    }
-                    .ch-mask {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        background: linear-gradient(to bottom, rgba(20,20,20,0) 40%, rgba(20,20,20,1) 95%);
-                    }
-                    
-                    /* Прячем конфликтующие блоки других плагинов (текст, описания) */
-                    .new-interface-info, 
-                    .agnative-hero__content,
-                    .new-interface-card-title {
-                        display: none !important;
-                    }
-
-                    /* Поднимаем сетку фильмов чуть выше для красоты */
-                    .items--grid, .category-full {
-                        margin-top: 10vh !important;
-                    }
-                </style>
-            `;
-            $('head').append(style);
-
-            this.listen();
-        };
-
-        // Следим за перемещением фокуса по карточкам
-        this.listen = function () {
-            Lampa.Listener.follow('target', (e) => {
-                if (e.type === 'set' && e.target && e.target.data) {
-                    this.updateImage(e.target.data);
+        // 3. Отслеживаем, открыта ли страница самого фильма, чтобы не скрывать там текст
+        Lampa.Listener.follow('activity', function (e) {
+            if (e.type === 'start' || e.type === 'activity') {
+                var comp = e.object && e.object.component;
+                if (comp === 'full') {
+                    $('body').addClass('is-movie-page');
+                    $('#dynamic-clean-poster').hide(); // Прячем наш постер на странице фильма
+                } else {
+                    $('body').removeClass('is-movie-page');
+                    $('#dynamic-clean-poster').show();
                 }
-            });
-        };
+            }
+        });
 
-        // Обновляем картинку
-        this.updateImage = function (data) {
-            var img = data.backdrop_path || data.img;
-            if (!img) return;
+        // 4. Логика смены картинок при перемещении по карточкам
+        var lastImage = '';
+        Lampa.Listener.follow('target', function (e) {
+            // Если мы не на странице фильма и фокус на карточке
+            if (!$('body').hasClass('is-movie-page') && e.type === 'set' && e.target && e.target.data) {
+                var data = e.target.data;
+                var img = data.backdrop_path ? Lampa.TMDB.image('t/p/original' + data.backdrop_path) : '';
+                
+                // Если картинка есть и она новая
+                if (img && img !== lastImage) {
+                    lastImage = img;
+                    var $imgElement = $('.dcp-image');
+                    
+                    // Затухание старой картинки
+                    $imgElement.css('opacity', 0); 
+                    
+                    // Предзагрузка и показ новой
+                    var temp = new Image();
+                    temp.onload = function () {
+                        $imgElement.attr('src', img).css('opacity', 1);
+                    };
+                    temp.src = img;
+                }
+            }
+        });
 
-            // Формируем полный путь к картинке TMDB
-            if (img.indexOf('/') === 0) img = 'https://image.tmdb.org/t/p/original' + img;
-            
-            if (img === lastImg) return;
-            lastImg = img;
-
-            var imgElement = banner.find('.ch-image');
-            
-            // Плавная смена через прозрачность
-            imgElement.css({ 'opacity': '0', 'transform': 'scale(1.05)' });
-            
-            var tempImg = new Image();
-            tempImg.onload = function() {
-                imgElement.css({
-                    'background-image': 'url(' + img + ')',
-                    'opacity': '1',
-                    'transform': 'scale(1)'
-                });
-            };
-            tempImg.src = img;
-        };
+        console.log('✅ Dynamic Clean Poster Plugin успешно загружен!');
     }
 
-    // Запуск плагина после готовности Lampa
+    // Запуск после инициализации Lampa
     if (window.appready) {
-        new CleanHeroBanner().init();
+        initDynamicCleanPoster();
     } else {
         Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') new CleanHeroBanner().init();
+            if (e.type === 'ready') initDynamicCleanPoster();
         });
     }
 })();
